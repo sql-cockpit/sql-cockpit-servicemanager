@@ -1,0 +1,54 @@
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Env/secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.pfx
+
+# Logs/runtime noise
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Node/Electron dependencies
+node_modules/
+**/node_modules/
+
+# Build/cache outputs
+dist/
+out/
+release/
+coverage/
+.cache/
+.eslintcache
+*.tsbuildinfo
+
+# Electron build artifacts (configured output)
+windows/publish/
+publish.zip
+*.exe
+*.msi
+*.AppImage
+*.dmg
+*.deb
+*.rpm
+*.snap
+*.blockmap
+latest*.yml
+builder-debug.yml
+builder-effective-config.yaml
+
+# Keep lockfiles for reproducible builds
+#! package-lock.json
+#! yarn.lock
+#! pnpm-lock.yaml

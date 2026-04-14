@@ -1,0 +1,99 @@
+{
+  "serviceName": "SQLCockpitServiceHost",
+  "repoRoot": "C:\\Scripts\\SQL Tables Sync",
+  "listenPrefix": "http://127.0.0.1:8610/",
+  "requireLocalRequests": true,
+  "apiKey": "",
+  "autoStart": true,
+  "autoRestart": true,
+  "healthPollSeconds": 5,
+  "healthFailureThreshold": 3,
+  "restartDelaySeconds": 3,
+  "components": [
+    {
+      "id": "web-api",
+      "displayName": "SQL Cockpit Web API",
+      "disabled": false,
+      "autoStart": true,
+      "command": "node",
+      "workingDirectory": "{RepoRoot}\\webapp",
+      "args": [
+        "server.js",
+        "--configServer",
+        "NASCAR",
+        "--configDatabase",
+        "EPC_Imports_PCK",
+        "--configSchema",
+        "Sync",
+        "--configIntegratedSecurity",
+        "--trustServerCertificate",
+        "--listenPrefix",
+        "http://127.0.0.1:8080/",
+        "--notificationsListenPrefix",
+        "http://127.0.0.1:8090/",
+        "--runtimeProfile",
+        "prod",
+        "--serviceHostControlUrl",
+        "http://127.0.0.1:8610/",
+        "--manageComponents",
+        "false"
+      ],
+      "healthUrl": "http://127.0.0.1:8080/health"
+    },
+    {
+      "id": "docs",
+      "displayName": "Docs server",
+      "disabled": false,
+      "autoStart": true,
+      "command": "powershell.exe",
+      "workingDirectory": "{RepoRoot}",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "{RepoRoot}\\Start-SqlTablesSyncDocsServer.ps1",
+        "-ListenPrefix",
+        "http://127.0.0.1:8000/",
+        "-ForceStaticServer"
+      ],
+      "healthUrl": "http://127.0.0.1:8000/"
+    },
+    {
+      "id": "notifications",
+      "displayName": "Notifications server",
+      "disabled": false,
+      "autoStart": true,
+      "command": "powershell.exe",
+      "workingDirectory": "{RepoRoot}",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "{RepoRoot}\\Start-SqlTablesSyncNotificationsServer.ps1",
+        "-ListenPrefix",
+        "http://127.0.0.1:8090/"
+      ],
+      "healthUrl": "http://127.0.0.1:8090/health"
+    },
+    {
+      "id": "object-search",
+      "displayName": "Object search service",
+      "disabled": false,
+      "autoStart": true,
+      "command": "powershell.exe",
+      "workingDirectory": "{RepoRoot}",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "{RepoRoot}\\Start-SqlObjectSearchService.ps1",
+        "-SettingsPath",
+        "{RepoRoot}\\object-search\\sql-object-search.settings.json"
+      ],
+      "healthUrl": "http://127.0.0.1:8094/health"
+    }
+  ]
+}

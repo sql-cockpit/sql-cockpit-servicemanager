@@ -1,0 +1,16 @@
+{
+  "name": "sql-cockpit-service-control",
+  "version": "1.0.0",
+  "build": {
+    "appId": "com.sqlcockpit.servicecontrol",
+    "productName": "SQL Cockpit Service Control",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "jjmpsp",
+        "repo": "sql-cockpit-servicemanager",
+        "releaseType": "release"
+      }
+    ]
+  }
+}

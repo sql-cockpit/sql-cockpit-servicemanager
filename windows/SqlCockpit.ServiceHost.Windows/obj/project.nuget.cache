@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "dgSpecHash": "HpQM2RnfIDg=",
+  "success": true,
+  "projectFilePath": "C:\\Scripts\\SQL Tables Sync\\service\\windows\\SqlCockpit.ServiceHost.Windows\\SqlCockpit.ServiceHost.Windows.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\Administrator.PEACOCKS\\.nuget\\packages\\system.diagnostics.eventlog\\9.0.0\\system.diagnostics.eventlog.9.0.0.nupkg.sha512",
+    "C:\\Users\\Administrator.PEACOCKS\\.nuget\\packages\\system.serviceprocess.servicecontroller\\9.0.0\\system.serviceprocess.servicecontroller.9.0.0.nupkg.sha512"
+  ],
+  "logs": []
+}
