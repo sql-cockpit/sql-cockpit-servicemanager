@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld("serviceControl", {
     restartAllComponents: () => invoke("components:restart-all"),
     stopAllComponents: () => invoke("components:stop-all"),
     componentAction: (componentId, action) => invoke("component:action", componentId, action),
+    openDocs: () => invoke("docs:open"),
     checkUpdates: () => invoke("updates:check"),
     installUpdate: () => invoke("updates:install"),
     onUpdateStatus: (handler) => {

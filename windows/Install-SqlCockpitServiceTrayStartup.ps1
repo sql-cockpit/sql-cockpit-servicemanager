@@ -24,13 +24,30 @@ if (-not (Test-Path -LiteralPath $SettingsPath -PathType Leaf)) {
 }
 
 if ([string]::IsNullOrWhiteSpace($ExecutablePath)) {
-    $candidatePaths = @(
-        (Join-Path -Path $scriptRoot -ChildPath "publish\electron-control\win-unpacked\SQL Cockpit Service Control.exe"),
-        (Join-Path -Path $repoRoot -ChildPath "publish\electron-control\win-unpacked\SQL Cockpit Service Control.exe")
-    )
+    $candidatePaths = New-Object System.Collections.Generic.List[string]
+    $candidatePaths.Add((Join-Path -Path $scriptRoot -ChildPath "publish\electron-control\win-unpacked\SQL Cockpit Service Control.exe"))
+    $candidatePaths.Add((Join-Path -Path $repoRoot -ChildPath "publish\electron-control\win-unpacked\SQL Cockpit Service Control.exe"))
+
+    $publishRoots = @(
+        (Join-Path -Path $scriptRoot -ChildPath "publish"),
+        (Join-Path -Path $repoRoot -ChildPath "publish")
+    ) | Select-Object -Unique
+
+    foreach ($publishRoot in $publishRoots) {
+        if (-not (Test-Path -LiteralPath $publishRoot -PathType Container)) {
+            continue
+        }
+
+        $buildDirectories = Get-ChildItem -Path $publishRoot -Directory -Filter "electron-control*" -ErrorAction SilentlyContinue |
+            Sort-Object -Property LastWriteTime -Descending
+        foreach ($buildDirectory in $buildDirectories) {
+            $candidatePaths.Add((Join-Path -Path $buildDirectory.FullName -ChildPath "win-unpacked\SQL Cockpit Service Control.exe"))
+        }
+    }
+
     $ExecutablePath = $candidatePaths | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
     if ([string]::IsNullOrWhiteSpace($ExecutablePath)) {
-        $ExecutablePath = $candidatePaths[0]
+        $ExecutablePath = $candidatePaths | Select-Object -First 1
     }
 }
 

@@ -1,13 +1,13 @@
 {
   "name": "sql-cockpit-service-control",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "private": true,
   "description": "SQL Cockpit Windows Service Control desktop companion",
   "main": "main.js",
   "scripts": {
     "dev": "electron .",
-    "dist": "electron-builder --win nsis",
-    "dist:portable": "electron-builder --win portable"
+    "dist": "node ./build/run-electron-builder.js nsis",
+    "dist:portable": "node ./build/run-electron-builder.js portable"
   },
   "dependencies": {
     "electron-updater": "^6.3.9"
@@ -24,6 +24,56 @@
       "preload.js",
       "renderer/**/*"
     ],
+    "extraResources": [
+      {
+        "from": "build/setup-scripts",
+        "to": "setup/scripts",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../Install-SqlCockpitWindowsService.ps1",
+        "to": "setup/windows/Install-SqlCockpitWindowsService.ps1"
+      },
+      {
+        "from": "../Uninstall-SqlCockpitWindowsService.ps1",
+        "to": "setup/windows/Uninstall-SqlCockpitWindowsService.ps1"
+      },
+      {
+        "from": "../Install-SqlCockpitServiceTrayStartup.ps1",
+        "to": "setup/windows/Install-SqlCockpitServiceTrayStartup.ps1"
+      },
+      {
+        "from": "../Uninstall-SqlCockpitServiceTrayStartup.ps1",
+        "to": "setup/windows/Uninstall-SqlCockpitServiceTrayStartup.ps1"
+      },
+      {
+        "from": "../Publish-SqlCockpitServiceControlElectron.ps1",
+        "to": "setup/windows/Publish-SqlCockpitServiceControlElectron.ps1"
+      },
+      {
+        "from": "../sql-cockpit-service.settings.json",
+        "to": "setup/windows/sql-cockpit-service.settings.json"
+      },
+      {
+        "from": "../sql-cockpit-service.dev.settings.json",
+        "to": "setup/windows/sql-cockpit-service.dev.settings.json"
+      },
+      {
+        "from": "../sql-cockpit-service.prod.settings.json",
+        "to": "setup/windows/sql-cockpit-service.prod.settings.json"
+      },
+      {
+        "from": "../SqlCockpit.ServiceHost.Windows",
+        "to": "setup/windows/SqlCockpit.ServiceHost.Windows",
+        "filter": [
+          "**/*",
+          "!**/bin/**",
+          "!**/obj/**"
+        ]
+      }
+    ],
     "directories": {
       "output": "../publish/electron-control"
     },
@@ -32,6 +82,12 @@
         "nsis",
         "portable"
       ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowElevation": true,
+      "perMachine": true,
+      "include": "build/installer.nsh"
     },
     "publish": [
       {

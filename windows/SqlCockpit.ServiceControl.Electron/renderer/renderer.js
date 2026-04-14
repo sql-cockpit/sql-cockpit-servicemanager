@@ -60,10 +60,10 @@ function renderMeta() {
         return;
     }
 
-    elements.appVersion.textContent = `Version: ${state.meta.version}`;
-    elements.settingsPath.textContent = `Settings: ${state.meta.settingsPath}`;
-    elements.controlUrl.textContent = `Control API: ${state.meta.controlApiBaseUrl}`;
-    elements.serviceName.textContent = state.meta.serviceName;
+    elements.appVersion.textContent = `Version: ${state.meta.version || "-"}`;
+    elements.settingsPath.textContent = `Settings: ${state.meta.settingsPath || "-"}`;
+    elements.controlUrl.textContent = `Control API: ${state.meta.controlApiBaseUrl || "-"}`;
+    elements.serviceName.textContent = state.meta.serviceName || "-";
     elements.installUpdateButton.disabled = !state.meta.updateDownloaded;
 }
 
@@ -73,9 +73,17 @@ function renderService(service) {
     elements.serviceStatus.className = `pill ${serviceStatusClass(status)}`;
 }
 
-function renderComponents(runtime) {
+function renderComponents(runtime, diagnostics = {}) {
     const components = Array.isArray(runtime?.components) ? runtime.components : [];
     elements.componentBody.innerHTML = "";
+
+    if (!components.length) {
+        const row = document.createElement("tr");
+        const errorHint = diagnostics.runtimeError || diagnostics.settingsError || "";
+        row.innerHTML = `<td colspan="10">${errorHint ? `No managed components available. ${errorHint}` : "No managed components available."}</td>`;
+        elements.componentBody.appendChild(row);
+        return;
+    }
 
     components.forEach((component) => {
         const row = document.createElement("tr");
@@ -139,20 +147,42 @@ function renderComponentDetail() {
 }
 
 async function refreshAll() {
+    let meta = null;
     try {
-        const [meta, snapshot] = await Promise.all([
-            serviceControl.getMeta(),
-            serviceControl.getStatus()
-        ]);
+        meta = await serviceControl.getMeta();
         state.meta = meta;
-        state.snapshot = snapshot;
         renderMeta();
-        renderService(snapshot.service);
-        renderComponents(snapshot.runtime);
-        renderComponentDetail();
-        setStatus(`Refreshed at ${new Date().toLocaleTimeString()}`);
     } catch (error) {
-        setStatus(`Refresh failed: ${error.message}`);
+        setStatus(`Metadata refresh failed: ${error.message}`);
+    }
+
+    try {
+        const snapshot = await serviceControl.getStatus();
+        state.snapshot = snapshot;
+        renderService(snapshot.service);
+        renderComponents(snapshot.runtime, snapshot.diagnostics);
+        renderComponentDetail();
+
+        const messages = [];
+        if (meta?.settingsError) {
+            messages.push(`settings: ${meta.settingsError}`);
+        }
+        if (snapshot?.diagnostics?.serviceError) {
+            messages.push(`service: ${snapshot.diagnostics.serviceError}`);
+        }
+        if (snapshot?.diagnostics?.runtimeError) {
+            messages.push(`runtime: ${snapshot.diagnostics.runtimeError}`);
+        }
+
+        if (messages.length) {
+            setStatus(`Refreshed with warnings at ${new Date().toLocaleTimeString()} (${messages.join(" | ")})`);
+        } else {
+            setStatus(`Refreshed at ${new Date().toLocaleTimeString()}`);
+        }
+    } catch (error) {
+        renderService({ status: "Unknown" });
+        renderComponents({ components: [] }, { runtimeError: error.message });
+        setStatus(`Status refresh failed: ${error.message}`);
     }
 }
 
@@ -200,6 +230,14 @@ function wireButtons() {
     document.getElementById("refreshButton").addEventListener("click", refreshAll);
     document.getElementById("startServiceButton").addEventListener("click", () => runServiceAction("start"));
     document.getElementById("stopServiceButton").addEventListener("click", () => runServiceAction("stop"));
+    document.getElementById("openDocsButton").addEventListener("click", async () => {
+        try {
+            const result = await serviceControl.openDocs();
+            setStatus(`Opened docs: ${result?.url || "http://127.0.0.1:8000/"}`);
+        } catch (error) {
+            setStatus(`Open docs failed: ${error.message}`);
+        }
+    });
 
     document.getElementById("startAllButton").addEventListener("click", () => runBulkAction("start"));
     document.getElementById("restartAllButton").addEventListener("click", () => runBulkAction("restart"));

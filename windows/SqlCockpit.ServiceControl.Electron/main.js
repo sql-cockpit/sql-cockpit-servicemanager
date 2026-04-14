@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, nativeImage, ipcMain, Notification } = require("electron");
+const { app, BrowserWindow, Menu, Tray, nativeImage, ipcMain, Notification, shell } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -58,6 +58,26 @@ function resolveSettingsPath(explicitPath = "") {
     return path.resolve(DEFAULT_SETTINGS_PATH);
 }
 
+function getSettingsMeta(explicitPath = "") {
+    const settingsPath = resolveSettingsPath(explicitPath);
+    const fallback = {
+        settingsPath,
+        serviceName: "SQLCockpitServiceHost",
+        apiKey: "",
+        controlApiBaseUrl: "http://127.0.0.1:8610",
+        settingsError: ""
+    };
+    try {
+        const settings = readServiceSettings(explicitPath);
+        return { ...settings, settingsError: "" };
+    } catch (error) {
+        return {
+            ...fallback,
+            settingsError: error?.message || "Failed to read settings."
+        };
+    }
+}
+
 function readServiceSettings(explicitPath = "") {
     const settingsPath = resolveSettingsPath(explicitPath);
     if (!fs.existsSync(settingsPath)) {
@@ -77,6 +97,24 @@ function readServiceSettings(explicitPath = "") {
         apiKey,
         controlApiBaseUrl: baseUrl
     };
+}
+
+function resolveDocsUrl(explicitPath = "") {
+    const defaultDocsUrl = "http://127.0.0.1:8000/";
+    try {
+        const settingsPath = resolveSettingsPath(explicitPath);
+        const raw = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+        const components = Array.isArray(raw?.components) ? raw.components : [];
+        const docsComponent = components.find((component) => String(component?.id || "").toLowerCase() === "docs");
+        const candidate = String(docsComponent?.healthUrl || "").trim();
+        if (candidate) {
+            return candidate;
+        }
+    } catch {
+        // Fallback to default.
+    }
+
+    return defaultDocsUrl;
 }
 
 async function requestControlApi(settings, endpoint, method = "GET") {
@@ -210,14 +248,15 @@ function setupAutoUpdater() {
 }
 
 ipcMain.handle("app:get-meta", async () => {
-    const settings = readServiceSettings();
+    const settings = getSettingsMeta();
     return {
         version: app.getVersion(),
         platform: os.platform(),
         settingsPath: settings.settingsPath,
         serviceName: settings.serviceName,
         controlApiBaseUrl: settings.controlApiBaseUrl,
-        updateDownloaded
+        updateDownloaded,
+        settingsError: settings.settingsError || ""
     };
 });
 
@@ -227,12 +266,44 @@ ipcMain.handle("settings:reload", async (_, explicitPath = "") => {
 });
 
 ipcMain.handle("status:get", async () => {
-    const settings = readServiceSettings();
-    const [service, runtime] = await Promise.all([
-        getWindowsServiceStatus(settings.serviceName),
-        requestControlApi(settings, "/api/runtime/components", "GET")
-    ]);
-    return { settings, service, runtime };
+    const settings = getSettingsMeta();
+    const diagnostics = {
+        settingsError: settings.settingsError || "",
+        serviceError: "",
+        runtimeError: ""
+    };
+
+    let service = {
+        Name: settings.serviceName,
+        DisplayName: settings.serviceName,
+        Status: "Unknown"
+    };
+    let runtime = { components: [] };
+
+    if (!diagnostics.settingsError) {
+        const [serviceResult, runtimeResult] = await Promise.allSettled([
+            getWindowsServiceStatus(settings.serviceName),
+            requestControlApi(settings, "/api/runtime/components", "GET")
+        ]);
+
+        if (serviceResult.status === "fulfilled") {
+            service = serviceResult.value || service;
+        } else {
+            diagnostics.serviceError = serviceResult.reason?.message || "Failed to query Windows service status.";
+        }
+
+        if (runtimeResult.status === "fulfilled") {
+            runtime = runtimeResult.value || runtime;
+        } else {
+            diagnostics.runtimeError = runtimeResult.reason?.message || "Failed to query runtime components.";
+        }
+    }
+
+    if (!Array.isArray(runtime?.components)) {
+        runtime = { components: [] };
+    }
+
+    return { settings, service, runtime, diagnostics };
 });
 
 ipcMain.handle("service:start", async () => {
@@ -283,6 +354,12 @@ ipcMain.handle("updates:install", async () => {
     }
     autoUpdater.quitAndInstall();
     return { installed: true };
+});
+
+ipcMain.handle("docs:open", async () => {
+    const docsUrl = resolveDocsUrl();
+    await shell.openExternal(docsUrl);
+    return { opened: true, url: docsUrl };
 });
 
 app.whenReady().then(() => {
