@@ -11,11 +11,31 @@
     <div>
       <h1>SQL Cockpit Service Control</h1>
       <p class="subtitle">Windows service and runtime component control plane</p>
+      <p id="environmentStatus" class="suiteNote">Environment: Unknown</p>
     </div>
-    <div class="meta">
-      <div id="appVersion">Version: -</div>
-      <div id="settingsPath">Settings: -</div>
-      <div id="controlUrl">Control API: -</div>
+    <div class="meta metaWell">
+      <div class="metaItem">
+        <span class="metaLabel">Version</span>
+        <span id="appVersion" class="metaValue">-</span>
+      </div>
+      <div class="metaItem">
+        <span class="metaLabel">Settings</span>
+        <span class="metaValue">
+          <span id="settingsPath">-</span>
+          <button id="copySettingsButton" class="iconButton" title="Copy settings path" aria-label="Copy settings path">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm4 4H8a2 2 0 0 0-2 2v16h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 18H8V7h12v16z"/></svg>
+          </button>
+        </span>
+      </div>
+      <div class="metaItem">
+        <span class="metaLabel">Control API</span>
+        <span class="metaValue">
+          <span id="controlUrl">-</span>
+          <button id="copyControlUrlButton" class="iconButton" title="Copy control API URL" aria-label="Copy control API URL">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm4 4H8a2 2 0 0 0-2 2v16h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 18H8V7h12v16z"/></svg>
+          </button>
+        </span>
+      </div>
     </div>
   </header>
 
@@ -31,10 +51,14 @@
         <span id="serviceStatus" class="pill">Unknown</span>
       </div>
       <div class="actions">
-        <button id="refreshButton">Refresh</button>
-        <button id="startServiceButton">Start Service</button>
-        <button id="stopServiceButton">Stop Service</button>
-        <button id="openDocsButton">Open Docs</button>
+        <button id="refreshButton" class="btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15.45-6.36L21 3v6h-6l2.32-2.32A7 7 0 1 0 19 12h2a9 9 0 0 1-18 0z"/></svg><span>Refresh</span></button>
+        <button id="startServiceButton" class="btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7-11-7z"/></svg><span>Start Service</span></button>
+        <button id="stopServiceButton" class="btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h12v12H6z"/></svg><span>Stop Service</span></button>
+        <button id="forceKillServiceButton" class="btn danger"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h12v12H6z"/></svg><span>Force Kill</span></button>
+        <button id="launchDesktopUiButton" class="btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v12H3V4zm2 2v8h14V6H5zm4 12h6v2H9v-2z"/></svg><span>Launch Desktop UI (User Session)</span></button>
+        <button id="repairSuiteButton" class="btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6V3L8 7l4 4V8a4 4 0 1 1-4 4H6a6 6 0 1 0 6-6z"/></svg><span>Run Repair (UAC)</span></button>
+        <button id="openServiceLogsButton" class="btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm8 1v5h5"/></svg><span>Open Service Logs</span></button>
+        <span id="adminRequiredBadge" class="adminBadge" hidden>Admin required (UAC prompt expected)</span>
       </div>
     </section>
 
@@ -42,8 +66,8 @@
       <h2>Updates</h2>
       <div id="updateStatus" class="statusLine">Update status: idle</div>
       <div class="actions">
-        <button id="checkUpdatesButton">Check For Updates</button>
-        <button id="installUpdateButton" disabled>Install Downloaded Update</button>
+        <button id="checkUpdatesButton" class="btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l4 4h-3v7h-2V7H8l4-4zm-7 9h2v7h10v-7h2v9H5v-9z"/></svg><span>Check For Updates</span></button>
+        <button id="installUpdateButton" class="btn" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v10l3-3 1.4 1.4-5.4 5.4-5.4-5.4L7 10l3 3V3h2zm-7 16h14v2H5v-2z"/></svg><span>Install Downloaded Update</span></button>
       </div>
     </section>
 
@@ -51,9 +75,9 @@
       <div class="cardHeader">
         <h2>Managed Components</h2>
         <div class="actions">
-          <button id="startAllButton">Start All</button>
-          <button id="restartAllButton">Restart All</button>
-          <button id="stopAllButton">Stop All</button>
+          <button id="startAllButton" class="btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7-11-7z"/></svg><span>Start All</span></button>
+          <button id="restartAllButton" class="btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6V3L8 7l4 4V8a4 4 0 1 1-4 4H6a6 6 0 1 0 6-6z"/></svg><span>Restart All</span></button>
+          <button id="stopAllButton" class="btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h12v12H6z"/></svg><span>Stop All</span></button>
         </div>
       </div>
 
@@ -64,6 +88,7 @@
             <th>Display</th>
             <th>Status</th>
             <th>Health</th>
+            <th>Ports</th>
             <th>PID</th>
             <th>Restart Count</th>
             <th>Last Start (UTC)</th>
@@ -78,11 +103,20 @@
 
     <section class="card full">
       <h2>Component Detail</h2>
+      <div class="detailActions">
+        <button id="openLogButton" class="btn compact" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm8 1v5h5"/></svg><span>Open Log</span></button>
+        <button id="copyErrorButton" class="btn compact" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm4 4H8a2 2 0 0 0-2 2v16h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 18H8V7h12v16z"/></svg><span>Copy Error</span></button>
+        <button id="copyTailButton" class="btn compact" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm4 4H8a2 2 0 0 0-2 2v16h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 18H8V7h12v16z"/></svg><span>Copy Output Tail</span></button>
+      </div>
       <div id="componentDetail" class="detail">Select a component row to view output tail and metadata.</div>
     </section>
   </main>
 
-  <footer id="statusBar">Ready.</footer>
+  <footer id="statusBar">
+    <span id="statusText">Ready.</span>
+    <span class="footerMeta">Created by <a href="https://joel-murphy.co.uk/" target="_blank" rel="noreferrer">Joel Murphy</a></span>
+  </footer>
+  <div id="toastContainer" class="toastContainer" aria-live="polite"></div>
 
   <script src="./renderer.js"></script>
 </body>

@@ -1,11 +1,44 @@
 [CmdletBinding()]
 param(
     [string]$SettingsPath = "",
-    [switch]$SkipInstall
+    [switch]$SkipInstall,
+    [switch]$RunAsAdministrator,
+    [string[]]$AdditionalArgs = @()
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+function Test-IsAdministrator {
+    return ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).
+        IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+if ($RunAsAdministrator -and -not (Test-IsAdministrator)) {
+    $argList = @(
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "`"$PSCommandPath`""
+    )
+    if (-not [string]::IsNullOrWhiteSpace($SettingsPath)) {
+        $argList += @("-SettingsPath", "`"$SettingsPath`"")
+    }
+    if ($SkipInstall) {
+        $argList += "-SkipInstall"
+    }
+    foreach ($extraArg in $AdditionalArgs) {
+        if (-not [string]::IsNullOrWhiteSpace($extraArg)) {
+            $argList += @("-AdditionalArgs", "`"$extraArg`"")
+        }
+    }
+    $argList += "-RunAsAdministrator"
+
+    Write-Host "[ELECTRON] Restarting launcher with elevation..." -ForegroundColor Yellow
+    Start-Process -FilePath "powershell.exe" -ArgumentList $argList -Verb RunAs | Out-Null
+    return
+}
 
 $appRoot = Join-Path -Path $PSScriptRoot -ChildPath "SqlCockpit.ServiceControl.Electron"
 $packagePath = Join-Path -Path $appRoot -ChildPath "package.json"
@@ -30,7 +63,13 @@ try {
     }
 
     Write-Host "[ELECTRON] Starting SQL Cockpit Service Control..." -ForegroundColor Green
-    npm run dev -- --settings "$SettingsPath"
+    $forwardedArgs = @("--settings", "$SettingsPath")
+    foreach ($extraArg in $AdditionalArgs) {
+        if (-not [string]::IsNullOrWhiteSpace($extraArg)) {
+            $forwardedArgs += $extraArg
+        }
+    }
+    npm run dev -- @forwardedArgs
 }
 finally {
     Pop-Location

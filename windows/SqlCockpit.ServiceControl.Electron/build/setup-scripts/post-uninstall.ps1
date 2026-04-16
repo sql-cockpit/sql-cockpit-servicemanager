@@ -30,3 +30,6 @@ $uninstallServiceScript = Join-Path -Path $windowsSetupRoot -ChildPath "Uninstal
 
 Invoke-BestEffortScript -ScriptPath $uninstallTrayScript -Arguments @("-TaskName", "SQLCockpitServiceTrayAtLogon")
 Invoke-BestEffortScript -ScriptPath $uninstallServiceScript -Arguments @("-ServiceName", "SQLCockpitServiceHost")
+
+Write-Host "[UNINSTALL] Desktop app is intentionally preserved by default." -ForegroundColor DarkCyan
+Write-Host "[UNINSTALL] To remove desktop app, run its own uninstaller separately." -ForegroundColor DarkCyan

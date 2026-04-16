@@ -12,6 +12,71 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+function Write-JsonNoBomFromTemplate {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$TemplatePath,
+        [Parameter(Mandatory = $true)]
+        [string]$DestinationPath
+    )
+
+    $value = Get-Content -LiteralPath $TemplatePath -Raw | ConvertFrom-Json
+    $json = $value | ConvertTo-Json -Depth 40
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($DestinationPath, $json, $utf8NoBom)
+}
+
+function Get-ServiceProcessId {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name
+    )
+
+    $queryOutput = & sc.exe queryex $Name 2>$null
+    if (-not $queryOutput) {
+        return 0
+    }
+
+    foreach ($line in $queryOutput) {
+        if ($line -match "PID\s*:\s*(\d+)") {
+            return [int]$matches[1]
+        }
+    }
+
+    return 0
+}
+
+function Stop-ServiceSafely {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name
+    )
+
+    $svc = Get-Service -Name $Name -ErrorAction Stop
+    if ($svc.Status -eq "Stopped") {
+        return
+    }
+
+    try {
+        Stop-Service -Name $Name -Force -ErrorAction Stop
+        Start-Sleep -Seconds 1
+    } catch {
+        Write-Host "[SERVICE] Graceful stop failed for [$Name], attempting process termination..." -ForegroundColor Yellow
+    }
+
+    $svc = Get-Service -Name $Name -ErrorAction Stop
+    if ($svc.Status -eq "Stopped") {
+        return
+    }
+
+    $servicePid = Get-ServiceProcessId -Name $Name
+    if ($servicePid -gt 0) {
+        Write-Host "[SERVICE] Terminating stuck service process PID [$servicePid]..." -ForegroundColor Yellow
+        & taskkill.exe /F /PID $servicePid | Out-Null
+        Start-Sleep -Seconds 1
+    }
+}
+
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).
     IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
@@ -45,15 +110,32 @@ if ([string]::IsNullOrWhiteSpace($SettingsPath)) {
     $SettingsPath = Join-Path -Path $settingsDirectory -ChildPath "sql-cockpit-service.settings.json"
 }
 
+ $serviceExists = $false
+try {
+    $existingService = Get-Service -Name $ServiceName -ErrorAction Stop
+    $serviceExists = $null -ne $existingService
+}
+catch {
+}
+
+if ($serviceExists) {
+    Write-Host "[SERVICE] Stopping existing service [$ServiceName] before publish to avoid file locks..." -ForegroundColor Cyan
+    Stop-ServiceSafely -Name $ServiceName
+}
+
 Write-Host "[SERVICE] Publishing Windows service host..." -ForegroundColor Cyan
 dotnet publish $projectPath -c $Configuration -r $RuntimeIdentifier --self-contained false -o $publishPath
+
+if ($LASTEXITCODE -ne 0) {
+    throw "dotnet publish failed for [$projectPath] with exit code [$LASTEXITCODE]."
+}
 
 if (-not (Test-Path -LiteralPath $publishedExePath -PathType Leaf)) {
     throw "Publish succeeded but executable was not found at [$publishedExePath]."
 }
 
 if (-not (Test-Path -LiteralPath $SettingsPath -PathType Leaf)) {
-    Copy-Item -LiteralPath $templateSettingsPath -Destination $SettingsPath
+    Write-JsonNoBomFromTemplate -TemplatePath $templateSettingsPath -DestinationPath $SettingsPath
     Write-Host "[SERVICE] Created settings file: $SettingsPath (profile: $SettingsProfile)" -ForegroundColor Yellow
 }
 else {
@@ -63,14 +145,6 @@ else {
 
 $serviceArgs = "--settings `"$SettingsPath`""
 $binPath = "`"$publishedExePath`" $serviceArgs"
-
-$serviceExists = $false
-try {
-    $existingService = Get-Service -Name $ServiceName -ErrorAction Stop
-    $serviceExists = $null -ne $existingService
-}
-catch {
-}
 
 if (-not $serviceExists) {
     Write-Host "[SERVICE] Creating service [$ServiceName]..." -ForegroundColor Cyan
@@ -83,7 +157,10 @@ if (-not $serviceExists) {
 }
 else {
     Write-Host "[SERVICE] Updating service [$ServiceName]..." -ForegroundColor Cyan
-    & sc.exe config $ServiceName binPath= $binPath start= auto | Out-Host
+    & sc.exe config $ServiceName "binPath= $binPath" "start= auto" | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        throw "sc.exe config failed while updating [$ServiceName]."
+    }
     & sc.exe description $ServiceName "SQL Cockpit SCM host for API-side process supervision." | Out-Host
 }
 

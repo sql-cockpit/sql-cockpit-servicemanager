@@ -1,9 +1,14 @@
 {
   "serviceName": "SQLCockpitServiceHost",
   "repoRoot": "C:\\Scripts\\SQL Tables Sync",
+  "desktopRepoRoot": "C:\\Scripts\\SQL Tables Sync\\webapp",
+  "apiRepoRoot": "C:\\Scripts\\SQL Tables Sync\\sql-cockpit-api",
+  "serviceRepoRoot": "C:\\Scripts\\SQL Tables Sync\\service",
+  "objectSearchRepoRoot": "C:\\Scripts\\SQL Tables Sync\\object-search",
   "listenPrefix": "http://127.0.0.1:8610/",
   "requireLocalRequests": true,
   "apiKey": "",
+  "installationMode": "suite",
   "autoStart": true,
   "autoRestart": true,
   "healthPollSeconds": 5,
@@ -16,7 +21,7 @@
       "disabled": false,
       "autoStart": true,
       "command": "node",
-      "workingDirectory": "{RepoRoot}\\webapp",
+      "workingDirectory": "{ApiRepoRoot}",
       "args": [
         "server.js",
         "--configServer",
@@ -28,7 +33,7 @@
         "--configIntegratedSecurity",
         "--trustServerCertificate",
         "--listenPrefix",
-        "http://127.0.0.1:8080/",
+        "http://127.0.0.1:8000/",
         "--notificationsListenPrefix",
         "http://127.0.0.1:8090/",
         "--runtimeProfile",
@@ -38,7 +43,7 @@
         "--manageComponents",
         "false"
       ],
-      "healthUrl": "http://127.0.0.1:8080/health"
+      "healthUrl": "http://127.0.0.1:8000/health"
     },
     {
       "id": "docs",
@@ -54,10 +59,10 @@
         "-File",
         "{RepoRoot}\\Start-SqlTablesSyncDocsServer.ps1",
         "-ListenPrefix",
-        "http://127.0.0.1:8000/",
+        "http://127.0.0.1:8001/",
         "-ForceStaticServer"
       ],
-      "healthUrl": "http://127.0.0.1:8000/"
+      "healthUrl": "http://127.0.0.1:8001/"
     },
     {
       "id": "notifications",
@@ -83,28 +88,56 @@
       "disabled": false,
       "autoStart": true,
       "command": "powershell.exe",
-      "workingDirectory": "{RepoRoot}",
+      "workingDirectory": "{ObjectSearchRepoRoot}",
       "args": [
         "-NoProfile",
         "-ExecutionPolicy",
         "Bypass",
         "-File",
-        "{RepoRoot}\\Start-SqlObjectSearchService.ps1",
+        "{ObjectSearchRepoRoot}\\Start-SqlObjectSearchService.ps1",
         "-SettingsPath",
-        "{RepoRoot}\\object-search\\sql-object-search.settings.json"
+        "{ObjectSearchRepoRoot}\\sql-object-search.settings.json"
       ],
       "healthUrl": "http://127.0.0.1:8094/health"
     },
     {
       "id": "desktop-app",
       "displayName": "SQL Cockpit Electron desktop app",
-      "disabled": true,
+      "disabled": false,
       "autoStart": false,
-      "command": "npm",
-      "workingDirectory": "{RepoRoot}\\webapp",
+      "autoRestart": false,
+      "command": "powershell.exe",
+      "workingDirectory": "{ServiceRepoRoot}",
       "args": [
-        "run",
-        "electron"
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "{RepoRoot}\\Start-SqlCockpitDesktopPackaged.ps1",
+        "-ConfigServer",
+        "NASCAR",
+        "-ConfigDatabase",
+        "EPC_Imports_PCK",
+        "-ConfigSchema",
+        "Sync",
+        "-ConfigIntegratedSecurity",
+        "-TrustServerCertificate",
+        "-ListenPrefix",
+        "http://127.0.0.1:8000/",
+        "-NotificationsListenPrefix",
+        "http://127.0.0.1:8090/",
+        "-DocsListenPrefix",
+        "http://127.0.0.1:8001/",
+        "-RuntimeProfile",
+        "prod",
+        "-ManageComponents",
+        "false",
+        "-ExternalApiOnly",
+        "true",
+        "-DesktopExecutablePath",
+        "C:\\Program Files\\SQL Cockpit\\SQL Cockpit.exe",
+        "-ServiceHostControlUrl",
+        "http://127.0.0.1:8610/"
       ],
       "healthUrl": ""
     }

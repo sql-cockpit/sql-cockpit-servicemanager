@@ -28,30 +28,13 @@ Assert-DotNetSdk
 $setupRoot = Split-Path -Path $PSScriptRoot -Parent
 $windowsSetupRoot = Join-Path -Path $setupRoot -ChildPath "windows"
 
-$installServiceScript = Join-Path -Path $windowsSetupRoot -ChildPath "Install-SqlCockpitWindowsService.ps1"
-$installTrayScript = Join-Path -Path $windowsSetupRoot -ChildPath "Install-SqlCockpitServiceTrayStartup.ps1"
-$serviceSettingsPath = Join-Path -Path $env:ProgramData -ChildPath "SqlCockpit\sql-cockpit-service.settings.json"
-$installedExe = Join-Path -Path $InstallDir -ChildPath "SQL Cockpit Service Control.exe"
+$repairSuiteScript = Join-Path -Path $windowsSetupRoot -ChildPath "Repair-SqlCockpitSuite.ps1"
 
-if (-not (Test-Path -LiteralPath $installServiceScript -PathType Leaf)) {
-    throw "Missing installer resource [$installServiceScript]."
-}
-if (-not (Test-Path -LiteralPath $installTrayScript -PathType Leaf)) {
-    throw "Missing installer resource [$installTrayScript]."
-}
-if (-not (Test-Path -LiteralPath $installedExe -PathType Leaf)) {
-    throw "Installed app executable was not found at [$installedExe]."
+if (-not (Test-Path -LiteralPath $repairSuiteScript -PathType Leaf)) {
+    throw "Missing installer resource [$repairSuiteScript]."
 }
 
-Write-Host "[INSTALLER] Provisioning SQL Cockpit Windows service..." -ForegroundColor Cyan
-powershell -NoProfile -ExecutionPolicy Bypass -File $installServiceScript -SettingsProfile prod -StartAfterInstall
-
-Write-Host "[INSTALLER] Provisioning SQL Cockpit tray startup task..." -ForegroundColor Cyan
-powershell -NoProfile -ExecutionPolicy Bypass -File $installTrayScript `
-    -ExecutablePath $installedExe `
-    -SettingsPath $serviceSettingsPath `
-    -SkipPublish `
-    -RunImmediately `
-    -UseHighestPrivileges
+Write-Host "[INSTALLER] Running SQL Cockpit suite provisioning..." -ForegroundColor Cyan
+powershell -NoProfile -ExecutionPolicy Bypass -File $repairSuiteScript -InstallDir $InstallDir -RunTrayNow
 
 Write-Host "[INSTALLER] Post-install provisioning complete." -ForegroundColor Green

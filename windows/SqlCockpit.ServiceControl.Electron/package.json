@@ -5,7 +5,9 @@
   "description": "SQL Cockpit Windows Service Control desktop companion",
   "main": "main.js",
   "scripts": {
+    "postinstall": "electron-builder install-app-deps",
     "dev": "electron .",
+    "dev:watch": "node ./build/dev-watch.js",
     "dist": "node ./build/run-electron-builder.js nsis",
     "dist:portable": "node ./build/run-electron-builder.js portable"
   },
@@ -33,6 +35,20 @@
         ]
       },
       {
+        "from": "../DesktopBundle",
+        "to": "setup/desktop",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../../icons",
+        "to": "icons",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
         "from": "../Install-SqlCockpitWindowsService.ps1",
         "to": "setup/windows/Install-SqlCockpitWindowsService.ps1"
       },
@@ -51,6 +67,18 @@
       {
         "from": "../Publish-SqlCockpitServiceControlElectron.ps1",
         "to": "setup/windows/Publish-SqlCockpitServiceControlElectron.ps1"
+      },
+      {
+        "from": "../Prepare-SqlCockpitSuiteDesktopBundle.ps1",
+        "to": "setup/windows/Prepare-SqlCockpitSuiteDesktopBundle.ps1"
+      },
+      {
+        "from": "../Install-SqlCockpitSuite.ps1",
+        "to": "setup/windows/Install-SqlCockpitSuite.ps1"
+      },
+      {
+        "from": "../Repair-SqlCockpitSuite.ps1",
+        "to": "setup/windows/Repair-SqlCockpitSuite.ps1"
       },
       {
         "from": "../sql-cockpit-service.settings.json",
@@ -78,10 +106,17 @@
       "output": "../publish/electron-control"
     },
     "win": {
+      "icon": "../../icons/windows/icon.ico",
       "target": [
         "nsis",
         "portable"
       ]
+    },
+    "mac": {
+      "icon": "../../icons/macos/icon.icns"
+    },
+    "linux": {
+      "icon": "../../icons/linux/icons"
     },
     "nsis": {
       "oneClick": false,

@@ -502,7 +502,7 @@ internal sealed class ProcessSupervisor
             state.Health.LastCheckedUtc = DateTimeOffset.UtcNow;
             state.OutputTail.Clear();
 
-            var logsDirectory = Path.Combine(_settings.RepoRoot, "Logs", "ServiceHost", componentId);
+            var logsDirectory = Path.Combine(_settings.ServiceRepoRoot, "Logs", "ServiceHost", componentId);
             Directory.CreateDirectory(logsDirectory);
             var timestamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss");
             var logPath = Path.Combine(logsDirectory, $"{timestamp}.log");
@@ -691,7 +691,7 @@ internal sealed class ProcessSupervisor
             state.Health.ConsecutiveFailures += 1;
         }
 
-        if (_settings.AutoRestart && state.Health.ConsecutiveFailures >= Math.Max(1, _settings.HealthFailureThreshold))
+        if (_settings.AutoRestart && spec.AutoRestart && state.Health.ConsecutiveFailures >= Math.Max(1, _settings.HealthFailureThreshold))
         {
             await RestartComponentAsync(componentId, "health-restart", cancellationToken);
         }
@@ -724,7 +724,7 @@ internal sealed class ProcessSupervisor
             state.LogWriter?.Dispose();
             state.LogWriter = null;
 
-            if (_settings.AutoRestart && !state.ManualStopRequested && _specs.TryGetValue(componentId, out var spec) && !spec.Disabled)
+            if (_settings.AutoRestart && !state.ManualStopRequested && _specs.TryGetValue(componentId, out var spec) && !spec.Disabled && spec.AutoRestart)
             {
                 state.RestartCount += 1;
                 _ = Task.Run(async () =>
@@ -744,7 +744,7 @@ internal sealed class ProcessSupervisor
     {
         if (string.IsNullOrWhiteSpace(workingDirectory))
         {
-            return _settings.RepoRoot;
+            return _settings.ServiceRepoRoot;
         }
 
         var expanded = ExpandValue(workingDirectory);
@@ -761,7 +761,11 @@ internal sealed class ProcessSupervisor
         var text = value ?? string.Empty;
         return text
             .Replace("{RepoRoot}", _settings.RepoRoot, StringComparison.OrdinalIgnoreCase)
-            .Replace("{SettingsDirectory}", Path.GetDirectoryName(_settings.SettingsPath) ?? _settings.RepoRoot, StringComparison.OrdinalIgnoreCase);
+            .Replace("{ApiRepoRoot}", _settings.ApiRepoRoot, StringComparison.OrdinalIgnoreCase)
+            .Replace("{DesktopRepoRoot}", _settings.DesktopRepoRoot, StringComparison.OrdinalIgnoreCase)
+            .Replace("{ServiceRepoRoot}", _settings.ServiceRepoRoot, StringComparison.OrdinalIgnoreCase)
+            .Replace("{ObjectSearchRepoRoot}", _settings.ObjectSearchRepoRoot, StringComparison.OrdinalIgnoreCase)
+            .Replace("{SettingsDirectory}", Path.GetDirectoryName(_settings.SettingsPath) ?? _settings.ServiceRepoRoot, StringComparison.OrdinalIgnoreCase);
     }
 
     private static void AppendOutput(ManagedComponentState state, string source, string line)
@@ -851,6 +855,10 @@ internal sealed class ServiceSettings
     public string ServiceName { get; set; } = "SQLCockpitServiceHost";
     public string SettingsPath { get; set; } = string.Empty;
     public string RepoRoot { get; set; } = string.Empty;
+    public string DesktopRepoRoot { get; set; } = string.Empty;
+    public string ApiRepoRoot { get; set; } = string.Empty;
+    public string ServiceRepoRoot { get; set; } = string.Empty;
+    public string ObjectSearchRepoRoot { get; set; } = string.Empty;
     public string ListenPrefix { get; set; } = "http://127.0.0.1:8610/";
     public bool RequireLocalRequests { get; set; } = true;
     public string ApiKey { get; set; } = string.Empty;
@@ -866,6 +874,22 @@ internal sealed class ServiceSettings
         if (string.IsNullOrWhiteSpace(RepoRoot))
         {
             RepoRoot = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(SettingsPath) ?? AppContext.BaseDirectory, "..", "..", ".."));
+        }
+        if (string.IsNullOrWhiteSpace(ApiRepoRoot))
+        {
+            ApiRepoRoot = Path.GetFullPath(Path.Combine(RepoRoot, "sql-cockpit-api"));
+        }
+        if (string.IsNullOrWhiteSpace(ServiceRepoRoot))
+        {
+            ServiceRepoRoot = Path.GetFullPath(Path.Combine(RepoRoot, "service"));
+        }
+        if (string.IsNullOrWhiteSpace(DesktopRepoRoot))
+        {
+            DesktopRepoRoot = Path.GetFullPath(Path.Combine(RepoRoot, "webapp"));
+        }
+        if (string.IsNullOrWhiteSpace(ObjectSearchRepoRoot))
+        {
+            ObjectSearchRepoRoot = Path.GetFullPath(Path.Combine(RepoRoot, "object-search"));
         }
 
         if (!ListenPrefix.EndsWith('/'))
@@ -887,6 +911,7 @@ internal sealed class ComponentSettings
     public string DisplayName { get; set; } = string.Empty;
     public bool Disabled { get; set; }
     public bool AutoStart { get; set; } = true;
+    public bool AutoRestart { get; set; } = true;
     public string Command { get; set; } = string.Empty;
     public List<string> Args { get; set; } = [];
     public string WorkingDirectory { get; set; } = string.Empty;
