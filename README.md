@@ -5,15 +5,15 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows-lightgrey?logo=windows)](https://github.com/sql-cockpit/sql-cockpit-servicemanager)
 
-> **Part of the [SQL Cockpit](https://github.com/sql-cockpit/sql-cockpit) suite** Ã¢â‚¬â€œ Your modern database management companion
+> **Part of the [SQL Cockpit](https://github.com/sql-cockpit/sql-cockpit) suite** – Your modern database management companion
 
 ---
 
-## Ã°Å¸â€œâ€“ Overview
+## 📖 Overview
 
 The **SQL Cockpit Service Manager** is a Windows tray companion application that provides seamless control and monitoring for the SQL Cockpit Windows Service. Built with Electron, this component ensures smooth integration between the SQL Cockpit Desktop app and the underlying Windows service infrastructure.
 
-### Ã°Å¸Å½Â¯ Purpose
+### 🎯 Purpose
 
 This repository contains:
 - **Service Control Tray App**: A system tray application for managing the SQL Cockpit Windows Service lifecycle
@@ -24,23 +24,23 @@ Together with the main [SQL Cockpit Desktop app](https://github.com/sql-cockpit/
 
 ---
 
-## Ã°Å¸Ââ€”Ã¯Â¸Â Architecture
+## 🏗️ Architecture
 
 ```
-Ã¢â€Å’Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€Â
-Ã¢â€â€š                    SQL Cockpit Suite                        Ã¢â€â€š
-Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€Â¤
-Ã¢â€â€š  Ã¢â€Å’Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€Â    Ã¢â€Å’Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€Â Ã¢â€â€š
-Ã¢â€â€š  Ã¢â€â€š  Desktop App    Ã¢â€â€šÃ¢â€”â€žÃ¢â€â‚¬Ã¢â€â‚¬Ã¢â€“ÂºÃ¢â€â€š  Service Control (Tray App)     Ã¢â€â€š Ã¢â€â€š
-Ã¢â€â€š  Ã¢â€â€š  (Electron)     Ã¢â€â€š    Ã¢â€â€š  (Electron + electron-updater)  Ã¢â€â€š Ã¢â€â€š
-Ã¢â€â€š  Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€Ëœ    Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€Ëœ Ã¢â€â€š
-Ã¢â€â€š                              Ã¢â€â€š                               Ã¢â€â€š
-Ã¢â€â€š                              Ã¢â€“Â¼                               Ã¢â€â€š
-Ã¢â€â€š                   Ã¢â€Å’Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€Â                   Ã¢â€â€š
-Ã¢â€â€š                   Ã¢â€â€š  Windows Service    Ã¢â€â€š                   Ã¢â€â€š
-Ã¢â€â€š                   Ã¢â€â€š  (.NET ServiceHost) Ã¢â€â€š                   Ã¢â€â€š
-Ã¢â€â€š                   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€Ëœ                   Ã¢â€â€š
-Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€Ëœ
+┌─────────────────────────────────────────────────────────────┐
+│                    SQL Cockpit Suite                        │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐    ┌─────────────────────────────────┐ │
+│  │  Desktop App    │◄──►│  Service Control (Tray App)     │ │
+│  │  (Electron)     │    │  (Electron + electron-updater)  │ │
+│  └─────────────────┘    └─────────────────────────────────┘ │
+│                              │                               │
+│                              ▼                               │
+│                   ┌─────────────────────┐                   │
+│                   │  Windows Service    │                   │
+│                   │  (.NET ServiceHost) │                   │
+│                   └─────────────────────┘                   │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ### Component Breakdown
@@ -54,18 +54,18 @@ Together with the main [SQL Cockpit Desktop app](https://github.com/sql-cockpit/
 
 ---
 
-## Ã°Å¸Å¡â‚¬ Quick Start
+## 🚀 Quick Start
 
 ### For End Users
 
 Download the latest installer from the [Releases page](https://github.com/sql-cockpit/sql-cockpit-servicemanager/releases):
 
-- **`SQL Cockpit Service Control Setup *.exe`** Ã¢â‚¬â€œ Run this single installer to provision the complete suite
+- **`SQL Cockpit Service Control Setup *.exe`** – Run this single installer to provision the complete suite
 
 The suite installer automatically provisions:
-- Ã¢Å“â€¦ SQL Cockpit Desktop app
-- Ã¢Å“â€¦ SQLCockpitServiceHost Windows service
-- Ã¢Å“â€¦ SQL Cockpit Service Control tray app with auto-startup
+- ✅ SQL Cockpit Desktop app
+- ✅ SQLCockpitServiceHost Windows service
+- ✅ SQL Cockpit Service Control tray app with auto-startup
 
 > **Note:** Do not distribute separate installers to end users for normal setup. Use the suite installer only.
 
@@ -85,7 +85,7 @@ powershell -ExecutionPolicy Bypass -File .\windows\Publish-SqlCockpitServiceCont
 
 ---
 
-## Ã°Å¸â€ºÂ Ã¯Â¸Â Development
+## 🛠️ Development
 
 ### Prerequisites
 
@@ -98,20 +98,20 @@ powershell -ExecutionPolicy Bypass -File .\windows\Publish-SqlCockpitServiceCont
 
 ```
 sql-cockpit-servicemanager/
-Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ .github/workflows/       # CI/CD pipelines
-Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ icons/                   # Application icons (Windows, macOS, Linux)
-Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ publish/                 # Build output directory
-Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ windows/
-Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ SqlCockpit.ServiceControl.Electron/
-Ã¢â€â€š   Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ build/           # Electron build configuration
-Ã¢â€â€š   Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ main.js          # Electron main process
-Ã¢â€â€š   Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ preload.js       # Preload script
-Ã¢â€â€š   Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ renderer/        # Renderer process UI
-Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ SqlCockpit.ServiceHost.Windows/
-Ã¢â€â€š   Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ ...              # .NET Windows Service source
-Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ *.ps1                # PowerShell installation/maintenance scripts
-Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ *.settings.json      # Service configuration templates
-Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ README.md
+├── .github/workflows/       # CI/CD pipelines
+├── icons/                   # Application icons (Windows, macOS, Linux)
+├── publish/                 # Build output directory
+├── windows/
+│   ├── SqlCockpit.ServiceControl.Electron/
+│   │   ├── build/           # Electron build configuration
+│   │   ├── main.js          # Electron main process
+│   │   ├── preload.js       # Preload script
+│   │   └── renderer/        # Renderer process UI
+│   ├── SqlCockpit.ServiceHost.Windows/
+│   │   └── ...              # .NET Windows Service source
+│   ├── *.ps1                # PowerShell installation/maintenance scripts
+│   └── *.settings.json      # Service configuration templates
+└── README.md
 ```
 
 ### Running in Development Mode
@@ -143,7 +143,7 @@ npm run dist:portable
 
 ---
 
-## Ã°Å¸â€œÂ¦ Release Publishing
+## 📦 Release Publishing
 
 This repository publishes installer artifacts through GitHub Releases using automated workflows.
 
@@ -192,7 +192,7 @@ This triggers the `.github/workflows/release-desktop-app.yml` workflow in the pa
 
 ---
 
-## Ã°Å¸â€Â§ Maintenance
+## 🔧 Maintenance
 
 ### Common Maintenance Tasks
 
@@ -221,7 +221,7 @@ powershell -ExecutionPolicy Bypass -File .\windows\Repair-SqlCockpitSuite.ps1
 
 ---
 
-## Ã°Å¸Â¤Â Contributing
+## 🤝 Contributing
 
 We welcome contributions! Here's how you can help:
 
@@ -255,20 +255,20 @@ Please be respectful and constructive in all interactions. We're building a comm
 
 ---
 
-## Ã°Å¸â€œÅ¾ Support
+## 📞 Support
 
 Community support is always free via GitHub Issues and Discussions.
 
 Commercial support is available for enterprise teams needing training, one-time migrations, and managed sync operations.
 Typical pricing (GBP): training from **GBP 1,200**, one-time migration from **GBP 4,000**, managed sync from **GBP 1,500/month**.
 
-## Ã°Å¸â€œâ€ž License
+## 📄 License
 
 This project is licensed under the **Apache License 2.0** - see [LICENSE](LICENSE) for details.
 
 ---
 
-## Ã°Å¸â€â€” Links
+## 🔗 Links
 
 - **Main Repository:** [https://github.com/sql-cockpit/sql-cockpit](https://github.com/sql-cockpit/sql-cockpit)
 - **Releases:** [https://github.com/sql-cockpit/sql-cockpit-servicemanager/releases](https://github.com/sql-cockpit/sql-cockpit-servicemanager/releases)
@@ -279,8 +279,8 @@ This project is licensed under the **Apache License 2.0** - see [LICENSE](LICENS
 
 <div align="center">
 
-**Made with Ã¢ÂÂ¤Ã¯Â¸Â by the SQL Cockpit Team**
+**Made with ❤️ by the SQL Cockpit Team**
 
-[Ã¢Â­Â Star this repo](https://github.com/sql-cockpit/sql-cockpit-servicemanager) | [Ã°Å¸Ââ€º Report an issue](https://github.com/sql-cockpit/sql-cockpit-servicemanager/issues) | [Ã°Å¸â€œâ€“ View main project](https://github.com/sql-cockpit/sql-cockpit)
+[⭐ Star this repo](https://github.com/sql-cockpit/sql-cockpit-servicemanager) | [🐛 Report an issue](https://github.com/sql-cockpit/sql-cockpit-servicemanager/issues) | [📖 View main project](https://github.com/sql-cockpit/sql-cockpit)
 
 </div>
