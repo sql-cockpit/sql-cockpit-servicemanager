@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("SqlCockpit.ServiceHost.Windows")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+528c2566a3957f9a138acbd0fe4ff29c43b015ed")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+14a6c6843ca6237c8121f3d10d3e2d5dc93821d8")]
 [assembly: System.Reflection.AssemblyProductAttribute("SqlCockpit.ServiceHost.Windows")]
 [assembly: System.Reflection.AssemblyTitleAttribute("SqlCockpit.ServiceHost.Windows")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
