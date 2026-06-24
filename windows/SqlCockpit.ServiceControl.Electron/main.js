@@ -460,7 +460,7 @@ function ensureDesktopLaunchArguments(fileName, args, repoRoot) {
 }
 
 function resolveDocsUrl(explicitPath = "") {
-    const defaultDocsUrl = "http://127.0.0.1:8000/";
+    const defaultDocsUrl = "http://127.0.0.1:8001/";
     try {
         const settingsPath = resolveSettingsPath(explicitPath);
         const raw = readJsonFile(settingsPath);
