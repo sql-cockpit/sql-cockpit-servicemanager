@@ -67,6 +67,7 @@ function parseCliArgs(argv) {
 
 const cli = parseCliArgs(process.argv.slice(1));
 const settingsPathFromCli = String(cli.settings || "").trim();
+const environmentIdFromCli = String(cli.environmentId || cli.environment || "").trim().toLowerCase();
 const autoStartApiOnLaunch = String(cli.autoStartApi ?? cli.autostartapi ?? "true").trim().toLowerCase() !== "false";
 
 function execFileAsync(filePath, args, options = {}) {
@@ -89,6 +90,12 @@ function resolveSettingsPath(explicitPath = "") {
     }
     if (settingsPathFromCli && fs.existsSync(settingsPathFromCli)) {
         return path.resolve(settingsPathFromCli);
+    }
+    if (["dev", "test", "prod"].includes(environmentIdFromCli)) {
+        const lanePath = path.join(process.env.ProgramData || "C:\\ProgramData", "SqlCockpit", environmentIdFromCli, "sql-cockpit-service.settings.json");
+        if (fs.existsSync(lanePath)) {
+            return path.resolve(lanePath);
+        }
     }
     return path.resolve(DEFAULT_SETTINGS_PATH);
 }
@@ -113,9 +120,15 @@ function getSettingsMeta(explicitPath = "") {
     const fallback = {
         settingsPath,
         serviceName: "SQLCockpitServiceHost",
+        environmentId: "prod",
+        channelName: "prod",
+        releaseVersion: "",
+        buildSha: "",
         apiKey: "",
         controlApiBaseUrl: "http://127.0.0.1:8610",
         repoRoot: "",
+        dataRoot: "",
+        logsRoot: "",
         settingsError: ""
     };
     try {
@@ -138,17 +151,27 @@ function readServiceSettings(explicitPath = "") {
     const raw = readJsonFile(settingsPath);
     const listenPrefix = String(raw.listenPrefix || "http://127.0.0.1:8610/").trim();
     const serviceName = String(raw.serviceName || "SQLCockpitServiceHost").trim() || "SQLCockpitServiceHost";
+    const environmentId = String(raw.environmentId || "prod").trim().toLowerCase() || "prod";
+    const channelName = String(raw.channelName || environmentId).trim() || environmentId;
     const apiKey = String(raw.apiKey || "");
     const repoRoot = String(raw.repoRoot || "").trim();
+    const dataRoot = String(raw.dataRoot || "").trim();
+    const logsRoot = String(raw.logsRoot || "").trim();
     const baseUrl = listenPrefix.replace(/\/+$/, "");
     cachedSettingsPath = settingsPath;
 
     return {
         settingsPath,
         serviceName,
+        environmentId,
+        channelName,
+        releaseVersion: String(raw.releaseVersion || "").trim(),
+        buildSha: String(raw.buildSha || "").trim(),
         apiKey,
         controlApiBaseUrl: baseUrl,
-        repoRoot
+        repoRoot,
+        dataRoot,
+        logsRoot
     };
 }
 
@@ -853,6 +876,11 @@ ipcMain.handle("app:get-meta", async () => {
         isPackaged: app.isPackaged,
         settingsPath: settings.settingsPath,
         serviceName: settings.serviceName,
+        environmentId: settings.environmentId,
+        channelName: settings.channelName,
+        releaseVersion: settings.releaseVersion,
+        buildSha: settings.buildSha,
+        logsRoot: settings.logsRoot,
         controlApiBaseUrl: settings.controlApiBaseUrl,
         updateDownloaded,
         settingsError: settings.settingsError || "",

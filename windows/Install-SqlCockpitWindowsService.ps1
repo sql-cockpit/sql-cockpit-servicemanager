@@ -5,7 +5,11 @@ param(
     [string]$RuntimeIdentifier = "win-x64",
     [ValidateSet("prod", "dev", "default")]
     [string]$SettingsProfile = "prod",
+    [ValidateSet("", "dev", "test", "prod")]
+    [string]$EnvironmentId = "",
     [string]$SettingsPath = "",
+    [string]$ReleaseVersion = "",
+    [string]$BuildSha = "",
     [switch]$StartAfterInstall
 )
 
@@ -24,6 +28,155 @@ function Write-JsonNoBomFromTemplate {
     $json = $value | ConvertTo-Json -Depth 40
     $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
     [System.IO.File]::WriteAllText($DestinationPath, $json, $utf8NoBom)
+}
+
+function Get-LaneDefaults {
+    param(
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("dev", "test", "prod")]
+        [string]$EnvironmentId
+    )
+
+    switch ($EnvironmentId) {
+        "dev" {
+            return @{
+                ServiceName = "SQLCockpitServiceHost.Dev"
+                DisplayName = "SQL Cockpit Service Host (Dev)"
+                SettingsProfile = "dev"
+                ControlPort = 8610
+                ApiPort = 8080
+                DocsPort = 8001
+                NotificationsPort = 8090
+                ObjectSearchPort = 8094
+                RuntimeProfile = "dev"
+            }
+        }
+        "test" {
+            return @{
+                ServiceName = "SQLCockpitServiceHost.Test"
+                DisplayName = "SQL Cockpit Service Host (Test)"
+                SettingsProfile = "prod"
+                ControlPort = 8620
+                ApiPort = 8200
+                DocsPort = 8201
+                NotificationsPort = 8290
+                ObjectSearchPort = 8294
+                RuntimeProfile = "prod"
+            }
+        }
+        default {
+            return @{
+                ServiceName = "SQLCockpitServiceHost.Prod"
+                DisplayName = "SQL Cockpit Service Host (Prod)"
+                SettingsProfile = "prod"
+                ControlPort = 8630
+                ApiPort = 8300
+                DocsPort = 8301
+                NotificationsPort = 8390
+                ObjectSearchPort = 8394
+                RuntimeProfile = "prod"
+            }
+        }
+    }
+}
+
+function Set-ArgPair {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object[]]$Args,
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+        [Parameter(Mandatory = $true)]
+        [string]$Value
+    )
+
+    $next = @($Args)
+    for ($index = 0; $index -lt $next.Count; $index += 1) {
+        if ([string]::Equals([string]$next[$index], $Name, [System.StringComparison]::OrdinalIgnoreCase)) {
+            if ($index + 1 -lt $next.Count) {
+                $next[$index + 1] = $Value
+            } else {
+                $next += $Value
+            }
+            return @($next)
+        }
+    }
+    return @($next + @($Name, $Value))
+}
+
+function Set-ServiceSettingsLane {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SettingsPath,
+        [Parameter(Mandatory = $true)]
+        [string]$EnvironmentId,
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Defaults,
+        [string]$ReleaseVersion,
+        [string]$BuildSha
+    )
+
+    $settings = Get-Content -LiteralPath $SettingsPath -Raw | ConvertFrom-Json
+    $settingsDirectory = Split-Path -Path $SettingsPath -Parent
+    $programDataRoot = Join-Path -Path $env:ProgramData -ChildPath "SqlCockpit\$EnvironmentId"
+    $objectSearchSettingsPath = Join-Path -Path $settingsDirectory -ChildPath "sql-object-search.$EnvironmentId.settings.json"
+    $settings.environmentId = $EnvironmentId
+    $settings.channelName = $EnvironmentId
+    $settings.serviceName = $Defaults.ServiceName
+    $settings.releaseVersion = $ReleaseVersion
+    $settings.buildSha = $BuildSha
+    $settings.listenPrefix = "http://127.0.0.1:$($Defaults.ControlPort)/"
+    $settings.dataRoot = Join-Path -Path $programDataRoot -ChildPath "data"
+    $settings.logsRoot = Join-Path -Path $programDataRoot -ChildPath "Logs"
+
+    foreach ($component in @($settings.components)) {
+        $id = [string]$component.id
+        if ($id -eq "web-api") {
+            $component.args = Set-ArgPair -Args $component.args -Name "--listenPrefix" -Value "http://127.0.0.1:$($Defaults.ApiPort)/"
+            $component.args = Set-ArgPair -Args $component.args -Name "--notificationsListenPrefix" -Value "http://127.0.0.1:$($Defaults.NotificationsPort)/"
+            $component.args = Set-ArgPair -Args $component.args -Name "--runtimeProfile" -Value $Defaults.RuntimeProfile
+            $component.args = Set-ArgPair -Args $component.args -Name "--serviceHostControlUrl" -Value $settings.listenPrefix
+            $component.args = Set-ArgPair -Args $component.args -Name "--environmentId" -Value $EnvironmentId
+            $component.args = Set-ArgPair -Args $component.args -Name "--objectSearchSettingsPath" -Value $objectSearchSettingsPath
+            $component.healthUrl = "http://127.0.0.1:$($Defaults.ApiPort)/health"
+        }
+        elseif ($id -eq "docs") {
+            $component.args = Set-ArgPair -Args $component.args -Name "-ListenPrefix" -Value "http://127.0.0.1:$($Defaults.DocsPort)/"
+            $component.healthUrl = "http://127.0.0.1:$($Defaults.DocsPort)/"
+        }
+        elseif ($id -eq "notifications") {
+            $component.args = Set-ArgPair -Args $component.args -Name "-ListenPrefix" -Value "http://127.0.0.1:$($Defaults.NotificationsPort)/"
+            $component.healthUrl = "http://127.0.0.1:$($Defaults.NotificationsPort)/health"
+        }
+        elseif ($id -eq "object-search") {
+            $component.args = Set-ArgPair -Args $component.args -Name "-SettingsPath" -Value $objectSearchSettingsPath
+            $component.healthUrl = "http://127.0.0.1:$($Defaults.ObjectSearchPort)/health"
+        }
+        elseif ($id -eq "desktop-app") {
+            $component.args = Set-ArgPair -Args $component.args -Name "-ListenPrefix" -Value "http://127.0.0.1:$($Defaults.ApiPort)/"
+            $component.args = Set-ArgPair -Args $component.args -Name "-NotificationsListenPrefix" -Value "http://127.0.0.1:$($Defaults.NotificationsPort)/"
+            $component.args = Set-ArgPair -Args $component.args -Name "-DocsListenPrefix" -Value "http://127.0.0.1:$($Defaults.DocsPort)/"
+            $component.args = Set-ArgPair -Args $component.args -Name "-RuntimeProfile" -Value $Defaults.RuntimeProfile
+            $component.args = Set-ArgPair -Args $component.args -Name "-ServiceHostControlUrl" -Value $settings.listenPrefix
+        }
+    }
+
+    $json = $settings | ConvertTo-Json -Depth 60
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($SettingsPath, $json, $utf8NoBom)
+
+    $baseObjectSearchSettingsPath = Join-Path -Path ([string]$settings.objectSearchRepoRoot) -ChildPath "sql-object-search.settings.json"
+    if ((Test-Path -LiteralPath $baseObjectSearchSettingsPath -PathType Leaf) -and -not (Test-Path -LiteralPath $objectSearchSettingsPath -PathType Leaf)) {
+        $objectSearchSettings = Get-Content -LiteralPath $baseObjectSearchSettingsPath -Raw | ConvertFrom-Json
+        $objectSearchSettings.service.listenUrl = "http://127.0.0.1:$($Defaults.ObjectSearchPort)/"
+        $objectSearchSettings.service.indexRoot = Join-Path -Path $settings.dataRoot -ChildPath "object-search\index"
+        $objectSearchSettings.sync.statusPath = Join-Path -Path $settings.dataRoot -ChildPath "object-search\sync-status.json"
+        $objectSearchSettings.sync.manifestDirectory = Join-Path -Path $settings.dataRoot -ChildPath "object-search\manifests"
+        $objectSearchSettings.sync.spoolDirectory = Join-Path -Path $settings.dataRoot -ChildPath "object-search\spool"
+        $objectSearchSettings.sync.logPath = Join-Path -Path $settings.logsRoot -ChildPath "ObjectSearch\sync.log"
+        $objectSearchJson = $objectSearchSettings | ConvertTo-Json -Depth 60
+        [System.IO.File]::WriteAllText($objectSearchSettingsPath, $objectSearchJson, $utf8NoBom)
+    }
 }
 
 function Get-ServiceProcessId {
@@ -85,7 +238,18 @@ if (-not $isAdmin) {
 
 $serviceRoot = Split-Path -Path $PSScriptRoot -Parent
 $projectPath = Join-Path -Path $PSScriptRoot -ChildPath "SqlCockpit.ServiceHost.Windows\SqlCockpit.ServiceHost.Windows.csproj"
-$publishPath = Join-Path -Path $serviceRoot -ChildPath ("publish\" + $RuntimeIdentifier)
+$laneDefaults = $null
+if (-not [string]::IsNullOrWhiteSpace($EnvironmentId)) {
+    $laneDefaults = Get-LaneDefaults -EnvironmentId $EnvironmentId
+    if (-not $PSBoundParameters.ContainsKey("ServiceName")) {
+        $ServiceName = $laneDefaults.ServiceName
+    }
+    if (-not $PSBoundParameters.ContainsKey("SettingsProfile")) {
+        $SettingsProfile = $laneDefaults.SettingsProfile
+    }
+}
+$publishLeaf = if ($laneDefaults) { "$RuntimeIdentifier-$EnvironmentId" } else { $RuntimeIdentifier }
+$publishPath = Join-Path -Path $serviceRoot -ChildPath ("publish\" + $publishLeaf)
 $publishedExePath = Join-Path -Path $publishPath -ChildPath "SqlCockpit.ServiceHost.Windows.exe"
 $templateSettingsPath = switch ($SettingsProfile) {
     "prod" { Join-Path -Path $PSScriptRoot -ChildPath "sql-cockpit-service.prod.settings.json" }
@@ -102,7 +266,11 @@ if (-not (Test-Path -LiteralPath $templateSettingsPath -PathType Leaf)) {
 }
 
 if ([string]::IsNullOrWhiteSpace($SettingsPath)) {
-    $settingsDirectory = Join-Path -Path $env:ProgramData -ChildPath "SqlCockpit"
+    $settingsDirectory = if ($laneDefaults) {
+        Join-Path -Path $env:ProgramData -ChildPath "SqlCockpit\$EnvironmentId"
+    } else {
+        Join-Path -Path $env:ProgramData -ChildPath "SqlCockpit"
+    }
     if (-not (Test-Path -LiteralPath $settingsDirectory -PathType Container)) {
         New-Item -ItemType Directory -Path $settingsDirectory | Out-Null
     }
@@ -136,6 +304,9 @@ if (-not (Test-Path -LiteralPath $publishedExePath -PathType Leaf)) {
 
 if (-not (Test-Path -LiteralPath $SettingsPath -PathType Leaf)) {
     Write-JsonNoBomFromTemplate -TemplatePath $templateSettingsPath -DestinationPath $SettingsPath
+    if ($laneDefaults) {
+        Set-ServiceSettingsLane -SettingsPath $SettingsPath -EnvironmentId $EnvironmentId -Defaults $laneDefaults -ReleaseVersion $ReleaseVersion -BuildSha $BuildSha
+    }
     Write-Host "[SERVICE] Created settings file: $SettingsPath (profile: $SettingsProfile)" -ForegroundColor Yellow
 }
 else {
@@ -151,7 +322,7 @@ if (-not $serviceExists) {
     New-Service `
         -Name $ServiceName `
         -BinaryPathName $binPath `
-        -DisplayName "SQL Cockpit Service Host" `
+        -DisplayName $(if ($laneDefaults) { $laneDefaults.DisplayName } else { "SQL Cockpit Service Host" }) `
         -Description "SQL Cockpit SCM host for API-side process supervision." `
         -StartupType Automatic | Out-Null
 }

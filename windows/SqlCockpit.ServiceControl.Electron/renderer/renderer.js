@@ -39,8 +39,19 @@ function renderEnvironmentStatus() {
     if (!elements.environmentStatus) {
         return;
     }
+    const environmentId = String(state.snapshot?.runtime?.environmentId || state.snapshot?.settings?.environmentId || state.meta?.environmentId || "").trim().toLowerCase();
+    const channelName = String(state.snapshot?.runtime?.channelName || state.snapshot?.settings?.channelName || state.meta?.channelName || "").trim();
+    const releaseVersion = String(state.snapshot?.runtime?.releaseVersion || state.snapshot?.settings?.releaseVersion || state.meta?.releaseVersion || "").trim();
+    const buildSha = String(state.snapshot?.runtime?.buildSha || state.snapshot?.settings?.buildSha || state.meta?.buildSha || "").trim();
     const runtimeProfile = String(state.snapshot?.settings?.runtimeProfile || "").trim().toLowerCase();
     const runtimeSuffix = runtimeProfile ? ` | Runtime: ${runtimeProfile}` : "";
+    const releaseSuffix = releaseVersion ? ` | ${releaseVersion}` : "";
+    const buildSuffix = buildSha ? ` | ${buildSha.slice(0, 12)}` : "";
+    if (environmentId) {
+        const label = channelName && channelName.toLowerCase() !== environmentId ? `${environmentId} / ${channelName}` : environmentId;
+        elements.environmentStatus.textContent = `Environment: ${label.toUpperCase()}${runtimeSuffix}${releaseSuffix}${buildSuffix}`;
+        return;
+    }
     if (state.meta?.isPackaged === false) {
         elements.environmentStatus.textContent = `Environment: Development Build${runtimeSuffix}`;
         return;
@@ -550,11 +561,12 @@ function wireButtons() {
     if (elements.openServiceLogsButton) {
         elements.openServiceLogsButton.addEventListener("click", async () => {
             const repoRoot = state.meta?.repoRoot || state.snapshot?.settings?.repoRoot;
-            if (!repoRoot) {
-                showToast("No repo root found in settings.", "warning");
+            const logsRoot = state.meta?.logsRoot || state.snapshot?.settings?.logsRoot;
+            const path = logsRoot || (repoRoot ? `${repoRoot}\\Logs\\ServiceHost` : "");
+            if (!path) {
+                showToast("No logs root found in settings.", "warning");
                 return;
             }
-            const path = `${repoRoot}\\Logs\\ServiceHost`;
             try {
                 await requireApi().openPath(path);
                 showToast("Opened service logs folder.", "success");
