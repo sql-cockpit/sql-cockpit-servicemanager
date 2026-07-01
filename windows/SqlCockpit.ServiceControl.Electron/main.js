@@ -11,6 +11,27 @@ const IS_MACOS = process.platform === "darwin";
 const WEB_API_COMPONENT_ID = "web-api";
 const WEB_API_LISTEN_PREFIX = "http://127.0.0.1:8000/";
 const WEB_API_HEALTH_URL = "http://127.0.0.1:8000/health";
+const LANE_DEFAULTS = {
+    dev: {
+        label: "Development",
+        serviceName: "SQLCockpitServiceHost.Dev",
+        controlApiBaseUrl: "http://127.0.0.1:8610",
+        settingsPath: path.join(process.env.ProgramData || "C:\\ProgramData", "SqlCockpit", "dev", "sql-cockpit-service.settings.json")
+    },
+    test: {
+        label: "Test",
+        serviceName: "SQLCockpitServiceHost.Test",
+        controlApiBaseUrl: "http://127.0.0.1:8620",
+        settingsPath: path.join(process.env.ProgramData || "C:\\ProgramData", "SqlCockpit", "test", "sql-cockpit-service.settings.json")
+    },
+    prod: {
+        label: "Production",
+        serviceName: "SQLCockpitServiceHost.Prod",
+        controlApiBaseUrl: "http://127.0.0.1:8630",
+        settingsPath: path.join(process.env.ProgramData || "C:\\ProgramData", "SqlCockpit", "prod", "sql-cockpit-service.settings.json"),
+        legacySettingsPath: path.join(process.env.ProgramData || "C:\\ProgramData", "SqlCockpit", "sql-cockpit-service.settings.json")
+    }
+};
 
 function resolveIconFile() {
     const devRoot = path.resolve(__dirname, "..", "..", "icons");
@@ -173,6 +194,102 @@ function readServiceSettings(explicitPath = "") {
         dataRoot,
         logsRoot
     };
+}
+
+function normalizeEnvironmentId(value) {
+    const normalized = String(value || "").trim().toLowerCase();
+    if (normalized === "development") return "dev";
+    if (normalized === "testing" || normalized === "beta") return "test";
+    if (normalized === "production") return "prod";
+    return ["dev", "test", "prod"].includes(normalized) ? normalized : "";
+}
+
+function getLaneSettings(environmentId) {
+    const normalized = normalizeEnvironmentId(environmentId);
+    if (!normalized || !LANE_DEFAULTS[normalized]) {
+        throw new Error(`Unsupported environment: ${environmentId}`);
+    }
+
+    const defaults = LANE_DEFAULTS[normalized];
+    const settingsPath = fs.existsSync(defaults.settingsPath)
+        ? defaults.settingsPath
+        : normalized === "prod" && defaults.legacySettingsPath && fs.existsSync(defaults.legacySettingsPath)
+            ? defaults.legacySettingsPath
+            : "";
+
+    if (settingsPath) {
+        return {
+            ...readServiceSettings(settingsPath),
+            environmentId: normalized,
+            laneLabel: defaults.label,
+            installed: true
+        };
+    }
+
+    return {
+        settingsPath: defaults.settingsPath,
+        serviceName: defaults.serviceName,
+        environmentId: normalized,
+        channelName: normalized,
+        laneLabel: defaults.label,
+        apiKey: "",
+        controlApiBaseUrl: defaults.controlApiBaseUrl,
+        repoRoot: "",
+        dataRoot: "",
+        logsRoot: path.join(process.env.ProgramData || "C:\\ProgramData", "SqlCockpit", normalized, "Logs"),
+        releaseVersion: "",
+        buildSha: "",
+        installed: false
+    };
+}
+
+async function getLaneStatus(environmentId) {
+    const settings = getLaneSettings(environmentId);
+    const diagnostics = {
+        settingsError: settings.installed ? "" : `Settings file not found at ${settings.settingsPath}`,
+        serviceError: "",
+        runtimeError: ""
+    };
+    let service = {
+        Name: settings.serviceName,
+        DisplayName: settings.serviceName,
+        Status: settings.installed ? "Unknown" : "Not Installed"
+    };
+    let runtime = { components: [] };
+
+    const serviceResult = await Promise.allSettled([
+        getWindowsServiceStatus(settings.serviceName)
+    ]);
+    if (serviceResult[0].status === "fulfilled") {
+        service = serviceResult[0].value || service;
+    } else if (settings.installed) {
+        diagnostics.serviceError = serviceResult[0].reason?.message || "Failed to query Windows service status.";
+    }
+
+    if (settings.installed) {
+        try {
+            runtime = await requestControlApi(settings, "/api/runtime/components", "GET");
+        } catch (error) {
+            diagnostics.runtimeError = error?.message || "Failed to query runtime components.";
+        }
+    }
+
+    if (!Array.isArray(runtime?.components)) {
+        runtime = { components: [] };
+    }
+
+    return {
+        environmentId: settings.environmentId,
+        label: settings.laneLabel,
+        settings,
+        service,
+        runtime,
+        diagnostics
+    };
+}
+
+async function getAllLaneStatuses() {
+    return Promise.all(["dev", "test", "prod"].map((environmentId) => getLaneStatus(environmentId)));
 }
 
 function readRawSettings(explicitPath = "") {
@@ -934,6 +1051,10 @@ ipcMain.handle("status:get", async () => {
     return { settings, service, runtime, diagnostics };
 });
 
+ipcMain.handle("environments:get-status", async () => {
+    return { environments: await getAllLaneStatuses() };
+});
+
 ipcMain.handle("service:start", async () => {
     const settings = readServiceSettings();
     const service = await startWindowsService(settings.serviceName);
@@ -969,6 +1090,56 @@ ipcMain.handle("components:stop-all", async () => {
 
 ipcMain.handle("component:action", async (_, componentId, action) => {
     const settings = readServiceSettings();
+    const normalizedAction = String(action || "").toLowerCase();
+    if (!["start", "stop", "restart"].includes(normalizedAction)) {
+        throw new Error(`Unsupported component action: ${action}`);
+    }
+    const id = encodeURIComponent(String(componentId || "").toLowerCase());
+    return requestControlApi(settings, `/api/runtime/components/${id}/${normalizedAction}`, "POST");
+});
+
+ipcMain.handle("environment:service-action", async (_, environmentId, action) => {
+    const settings = getLaneSettings(environmentId);
+    if (!settings.installed) {
+        throw new Error(`${settings.laneLabel} settings are not installed at ${settings.settingsPath}.`);
+    }
+    const normalizedAction = String(action || "").toLowerCase();
+    if (normalizedAction === "start") {
+        return { service: await startWindowsService(settings.serviceName), environmentId: settings.environmentId };
+    }
+    if (normalizedAction === "stop") {
+        return { service: await stopWindowsService(settings.serviceName), environmentId: settings.environmentId };
+    }
+    if (normalizedAction === "force-kill") {
+        return { service: await forceKillWindowsService(settings.serviceName), environmentId: settings.environmentId };
+    }
+    throw new Error(`Unsupported service action: ${action}`);
+});
+
+ipcMain.handle("environment:components-action", async (_, environmentId, action) => {
+    const settings = getLaneSettings(environmentId);
+    if (!settings.installed) {
+        throw new Error(`${settings.laneLabel} settings are not installed at ${settings.settingsPath}.`);
+    }
+    const normalizedAction = String(action || "").toLowerCase();
+    const endpoint = normalizedAction === "start"
+        ? "/api/runtime/components/start-all"
+        : normalizedAction === "restart"
+            ? "/api/runtime/components/restart-all"
+            : normalizedAction === "stop"
+                ? "/api/runtime/components/stop-all"
+                : "";
+    if (!endpoint) {
+        throw new Error(`Unsupported components action: ${action}`);
+    }
+    return requestControlApi(settings, endpoint, "POST");
+});
+
+ipcMain.handle("environment:component-action", async (_, environmentId, componentId, action) => {
+    const settings = getLaneSettings(environmentId);
+    if (!settings.installed) {
+        throw new Error(`${settings.laneLabel} settings are not installed at ${settings.settingsPath}.`);
+    }
     const normalizedAction = String(action || "").toLowerCase();
     if (!["start", "stop", "restart"].includes(normalizedAction)) {
         throw new Error(`Unsupported component action: ${action}`);

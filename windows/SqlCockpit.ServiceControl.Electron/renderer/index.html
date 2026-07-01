@@ -73,6 +73,31 @@
 
     <section class="card full">
       <div class="cardHeader">
+        <h2>Environment Services</h2>
+        <div class="actions">
+          <button id="refreshEnvironmentsButton" class="btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15.45-6.36L21 3v6h-6l2.32-2.32A7 7 0 1 0 19 12h2a9 9 0 0 1-18 0z"/></svg><span>Refresh</span></button>
+        </div>
+      </div>
+      <table id="environmentTable">
+        <thead>
+          <tr>
+            <th>Environment</th>
+            <th>Service</th>
+            <th>Service Status</th>
+            <th>Control API</th>
+            <th>Component</th>
+            <th>Component Status</th>
+            <th>Health</th>
+            <th>Ports</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="environmentBody"></tbody>
+      </table>
+    </section>
+
+    <section class="card full">
+      <div class="cardHeader">
         <h2>Managed Components</h2>
         <div class="actions">
           <button id="startAllButton" class="btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7-11-7z"/></svg><span>Start All</span></button>
