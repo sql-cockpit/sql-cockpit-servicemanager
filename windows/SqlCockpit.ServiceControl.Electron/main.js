@@ -11,6 +11,27 @@ const IS_MACOS = process.platform === "darwin";
 const WEB_API_COMPONENT_ID = "web-api";
 const WEB_API_LISTEN_PREFIX = "http://127.0.0.1:8000/";
 const WEB_API_HEALTH_URL = "http://127.0.0.1:8000/health";
+const LANE_DEFAULTS = {
+    dev: {
+        label: "Development",
+        serviceName: "SQLCockpitServiceHost.Dev",
+        controlApiBaseUrl: "http://127.0.0.1:8610",
+        settingsPath: path.join(process.env.ProgramData || "C:\\ProgramData", "SqlCockpit", "Environments", "dev", "sql-cockpit-service.settings.json")
+    },
+    test: {
+        label: "Test",
+        serviceName: "SQLCockpitServiceHost.Test",
+        controlApiBaseUrl: "http://127.0.0.1:8620",
+        settingsPath: path.join(process.env.ProgramData || "C:\\ProgramData", "SqlCockpit", "Environments", "test", "sql-cockpit-service.settings.json")
+    },
+    prod: {
+        label: "Production",
+        serviceName: "SQLCockpitServiceHost.Prod",
+        controlApiBaseUrl: "http://127.0.0.1:8630",
+        settingsPath: path.join(process.env.ProgramData || "C:\\ProgramData", "SqlCockpit", "Environments", "prod", "sql-cockpit-service.settings.json"),
+        legacySettingsPath: path.join(process.env.ProgramData || "C:\\ProgramData", "SqlCockpit", "sql-cockpit-service.settings.json")
+    }
+};
 
 function resolveIconFile() {
     const devRoot = path.resolve(__dirname, "..", "..", "icons");
@@ -67,6 +88,7 @@ function parseCliArgs(argv) {
 
 const cli = parseCliArgs(process.argv.slice(1));
 const settingsPathFromCli = String(cli.settings || "").trim();
+const environmentIdFromCli = String(cli.environmentId || cli.environment || "").trim().toLowerCase();
 const autoStartApiOnLaunch = String(cli.autoStartApi ?? cli.autostartapi ?? "true").trim().toLowerCase() !== "false";
 
 function execFileAsync(filePath, args, options = {}) {
@@ -84,11 +106,13 @@ function execFileAsync(filePath, args, options = {}) {
 }
 
 function resolveSettingsPath(explicitPath = "") {
-    if (explicitPath && fs.existsSync(explicitPath)) {
-        return path.resolve(explicitPath);
-    }
-    if (settingsPathFromCli && fs.existsSync(settingsPathFromCli)) {
-        return path.resolve(settingsPathFromCli);
+    // A requested lane/path must never fall back to another environment.
+    if (explicitPath) return path.resolve(explicitPath);
+    if (settingsPathFromCli) return path.resolve(settingsPathFromCli);
+    if (environmentIdFromCli) {
+        const lane = normalizeEnvironmentId(environmentIdFromCli);
+        if (!lane) throw new Error(`Unsupported environment: ${environmentIdFromCli}`);
+        return path.resolve(LANE_DEFAULTS[lane].settingsPath);
     }
     return path.resolve(DEFAULT_SETTINGS_PATH);
 }
@@ -113,9 +137,15 @@ function getSettingsMeta(explicitPath = "") {
     const fallback = {
         settingsPath,
         serviceName: "SQLCockpitServiceHost",
+        environmentId: "prod",
+        channelName: "prod",
+        releaseVersion: "",
+        buildSha: "",
         apiKey: "",
         controlApiBaseUrl: "http://127.0.0.1:8610",
         repoRoot: "",
+        dataRoot: "",
+        logsRoot: "",
         settingsError: ""
     };
     try {
@@ -138,18 +168,128 @@ function readServiceSettings(explicitPath = "") {
     const raw = readJsonFile(settingsPath);
     const listenPrefix = String(raw.listenPrefix || "http://127.0.0.1:8610/").trim();
     const serviceName = String(raw.serviceName || "SQLCockpitServiceHost").trim() || "SQLCockpitServiceHost";
+    const environmentId = String(raw.environmentId || "prod").trim().toLowerCase() || "prod";
+    const channelName = String(raw.channelName || environmentId).trim() || environmentId;
     const apiKey = String(raw.apiKey || "");
     const repoRoot = String(raw.repoRoot || "").trim();
+    const dataRoot = String(raw.dataRoot || "").trim();
+    const logsRoot = String(raw.logsRoot || "").trim();
     const baseUrl = listenPrefix.replace(/\/+$/, "");
     cachedSettingsPath = settingsPath;
 
     return {
         settingsPath,
         serviceName,
+        environmentId,
+        channelName,
+        releaseVersion: String(raw.releaseVersion || "").trim(),
+        buildSha: String(raw.buildSha || "").trim(),
         apiKey,
         controlApiBaseUrl: baseUrl,
-        repoRoot
+        repoRoot,
+        dataRoot,
+        logsRoot
     };
+}
+
+function normalizeEnvironmentId(value) {
+    const normalized = String(value || "").trim().toLowerCase();
+    if (normalized === "development") return "dev";
+    if (normalized === "testing" || normalized === "beta") return "test";
+    if (normalized === "production") return "prod";
+    return ["dev", "test", "prod"].includes(normalized) ? normalized : "";
+}
+
+function getLaneSettings(environmentId) {
+    const normalized = normalizeEnvironmentId(environmentId);
+    if (!normalized || !LANE_DEFAULTS[normalized]) {
+        throw new Error(`Unsupported environment: ${environmentId}`);
+    }
+
+    const defaults = LANE_DEFAULTS[normalized];
+    const settingsPath = fs.existsSync(defaults.settingsPath)
+        ? defaults.settingsPath
+        : normalized === "prod" && defaults.legacySettingsPath && fs.existsSync(defaults.legacySettingsPath)
+            ? defaults.legacySettingsPath
+            : "";
+
+    if (settingsPath) {
+        const loaded = readServiceSettings(settingsPath);
+        if (normalizeEnvironmentId(loaded.environmentId) !== normalized) {
+            throw new Error(`Settings identity does not match requested environment ${normalized}.`);
+        }
+        return {
+            ...loaded,
+            environmentId: normalized,
+            laneLabel: defaults.label,
+            installed: true
+        };
+    }
+
+    return {
+        settingsPath: defaults.settingsPath,
+        serviceName: defaults.serviceName,
+        environmentId: normalized,
+        channelName: normalized,
+        laneLabel: defaults.label,
+        apiKey: "",
+        controlApiBaseUrl: defaults.controlApiBaseUrl,
+        repoRoot: "",
+        dataRoot: "",
+        logsRoot: path.join(process.env.ProgramData || "C:\\ProgramData", "SqlCockpit", "Environments", normalized, "Logs"),
+        releaseVersion: "",
+        buildSha: "",
+        installed: false
+    };
+}
+
+async function getLaneStatus(environmentId) {
+    const settings = getLaneSettings(environmentId);
+    const diagnostics = {
+        settingsError: settings.installed ? "" : `Settings file not found at ${settings.settingsPath}`,
+        serviceError: "",
+        runtimeError: ""
+    };
+    let service = {
+        Name: settings.serviceName,
+        DisplayName: settings.serviceName,
+        Status: settings.installed ? "Unknown" : "Not Installed"
+    };
+    let runtime = { components: [] };
+
+    const serviceResult = await Promise.allSettled([
+        getWindowsServiceStatus(settings.serviceName)
+    ]);
+    if (serviceResult[0].status === "fulfilled") {
+        service = serviceResult[0].value || service;
+    } else if (settings.installed) {
+        diagnostics.serviceError = serviceResult[0].reason?.message || "Failed to query Windows service status.";
+    }
+
+    if (settings.installed) {
+        try {
+            runtime = await requestControlApi(settings, "/api/runtime/components", "GET");
+        } catch (error) {
+            diagnostics.runtimeError = error?.message || "Failed to query runtime components.";
+        }
+    }
+
+    if (!Array.isArray(runtime?.components)) {
+        runtime = { components: [] };
+    }
+
+    return {
+        environmentId: settings.environmentId,
+        label: settings.laneLabel,
+        settings,
+        service,
+        runtime,
+        diagnostics
+    };
+}
+
+async function getAllLaneStatuses() {
+    return Promise.all(["dev", "test", "prod"].map((environmentId) => getLaneStatus(environmentId)));
 }
 
 function readRawSettings(explicitPath = "") {
@@ -204,6 +344,11 @@ function ensureWebApiSettingsContract(explicitPath = "") {
     const raw = readJsonFile(settingsPath);
     if (!raw || !Array.isArray(raw.components)) {
         return { changed: false, reason: "components-not-found" };
+    }
+
+    if (normalizeEnvironmentId(raw.environmentId)) {
+        // Explicit lane settings own their ports, enabled components and runtime profile.
+        return { changed: false, reason: "lane-settings-authoritative" };
     }
 
     const component = raw.components.find((item) => String(item?.id || "").toLowerCase() === WEB_API_COMPONENT_ID);
@@ -513,11 +658,11 @@ async function ensureManagedApiStartedFromControlApp() {
     }
 
     if (!webApi.running) {
-        sendToRenderer("updates:status", { level: "info", message: "Starting managed web-api on port 8000..." });
+        sendToRenderer("updates:status", { level: "info", message: "Starting selected environment web-api..." });
         await requestControlApi(settings, `/api/runtime/components/${encodeURIComponent(WEB_API_COMPONENT_ID)}/start`, "POST");
     }
 
-    sendToRenderer("updates:status", { level: "success", message: "Managed web-api is online at http://127.0.0.1:8000/." });
+    sendToRenderer("updates:status", { level: "success", message: "Selected environment web-api is running." });
 }
 
 async function requestControlApi(settings, endpoint, method = "GET") {
@@ -853,6 +998,11 @@ ipcMain.handle("app:get-meta", async () => {
         isPackaged: app.isPackaged,
         settingsPath: settings.settingsPath,
         serviceName: settings.serviceName,
+        environmentId: settings.environmentId,
+        channelName: settings.channelName,
+        releaseVersion: settings.releaseVersion,
+        buildSha: settings.buildSha,
+        logsRoot: settings.logsRoot,
         controlApiBaseUrl: settings.controlApiBaseUrl,
         updateDownloaded,
         settingsError: settings.settingsError || "",
@@ -906,6 +1056,10 @@ ipcMain.handle("status:get", async () => {
     return { settings, service, runtime, diagnostics };
 });
 
+ipcMain.handle("environments:get-status", async () => {
+    return { environments: await getAllLaneStatuses() };
+});
+
 ipcMain.handle("service:start", async () => {
     const settings = readServiceSettings();
     const service = await startWindowsService(settings.serviceName);
@@ -941,6 +1095,56 @@ ipcMain.handle("components:stop-all", async () => {
 
 ipcMain.handle("component:action", async (_, componentId, action) => {
     const settings = readServiceSettings();
+    const normalizedAction = String(action || "").toLowerCase();
+    if (!["start", "stop", "restart"].includes(normalizedAction)) {
+        throw new Error(`Unsupported component action: ${action}`);
+    }
+    const id = encodeURIComponent(String(componentId || "").toLowerCase());
+    return requestControlApi(settings, `/api/runtime/components/${id}/${normalizedAction}`, "POST");
+});
+
+ipcMain.handle("environment:service-action", async (_, environmentId, action) => {
+    const settings = getLaneSettings(environmentId);
+    if (!settings.installed) {
+        throw new Error(`${settings.laneLabel} settings are not installed at ${settings.settingsPath}.`);
+    }
+    const normalizedAction = String(action || "").toLowerCase();
+    if (normalizedAction === "start") {
+        return { service: await startWindowsService(settings.serviceName), environmentId: settings.environmentId };
+    }
+    if (normalizedAction === "stop") {
+        return { service: await stopWindowsService(settings.serviceName), environmentId: settings.environmentId };
+    }
+    if (normalizedAction === "force-kill") {
+        return { service: await forceKillWindowsService(settings.serviceName), environmentId: settings.environmentId };
+    }
+    throw new Error(`Unsupported service action: ${action}`);
+});
+
+ipcMain.handle("environment:components-action", async (_, environmentId, action) => {
+    const settings = getLaneSettings(environmentId);
+    if (!settings.installed) {
+        throw new Error(`${settings.laneLabel} settings are not installed at ${settings.settingsPath}.`);
+    }
+    const normalizedAction = String(action || "").toLowerCase();
+    const endpoint = normalizedAction === "start"
+        ? "/api/runtime/components/start-all"
+        : normalizedAction === "restart"
+            ? "/api/runtime/components/restart-all"
+            : normalizedAction === "stop"
+                ? "/api/runtime/components/stop-all"
+                : "";
+    if (!endpoint) {
+        throw new Error(`Unsupported components action: ${action}`);
+    }
+    return requestControlApi(settings, endpoint, "POST");
+});
+
+ipcMain.handle("environment:component-action", async (_, environmentId, componentId, action) => {
+    const settings = getLaneSettings(environmentId);
+    if (!settings.installed) {
+        throw new Error(`${settings.laneLabel} settings are not installed at ${settings.settingsPath}.`);
+    }
     const normalizedAction = String(action || "").toLowerCase();
     if (!["start", "stop", "restart"].includes(normalizedAction)) {
         throw new Error(`Unsupported component action: ${action}`);
@@ -1067,7 +1271,7 @@ app.whenReady().then(() => {
         if (reconciliation.changed) {
             sendToRenderer("updates:status", {
                 level: "info",
-                message: `Updated service settings to enforce web-api on ${WEB_API_LISTEN_PREFIX}`
+                message: "Updated legacy web-api settings"
             });
         }
     } catch (error) {

@@ -283,6 +283,7 @@ tbody tr:hover {
 .status-paused { color: #facc15; }
 .health-healthy { color: var(--accent); }
 .health-unhealthy { color: var(--warn); }
+.muted { color: var(--muted); }
 
 .detail {
   margin-top: 10px;

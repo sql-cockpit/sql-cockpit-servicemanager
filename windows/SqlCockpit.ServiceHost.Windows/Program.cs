@@ -49,7 +49,7 @@ public static class Program
             return;
         }
 
-        ServiceBase.Run(new WindowsServiceBridge(host));
+        ServiceBase.Run(new WindowsServiceBridge(host, settings.ServiceName));
     }
 
     private static Dictionary<string, string> ParseArgs(string[] args)
@@ -106,9 +106,14 @@ public static class Program
         return parsed;
     }
 
-    private sealed class WindowsServiceBridge(ServiceHost host) : ServiceBase
+    private sealed class WindowsServiceBridge : ServiceBase
     {
-        private readonly ServiceHost _host = host;
+        private readonly ServiceHost _host;
+        public WindowsServiceBridge(ServiceHost host, string serviceName)
+        {
+            _host = host;
+            ServiceName = serviceName;
+        }
 
         protected override void OnStart(string[] args)
         {
@@ -260,13 +265,54 @@ internal sealed class ControlApiServer(ServiceSettings settings)
             var method = context.Request.HttpMethod.ToUpperInvariant();
             var supervisor = _supervisor ?? throw new InvalidOperationException("Supervisor is unavailable.");
 
+            if (method == "GET" && path.Equals("/openapi.json", StringComparison.OrdinalIgnoreCase))
+            {
+                await WriteJsonAsync(context.Response, 200, JsonSerializer.Deserialize<JsonElement>(ServiceHostOpenApi.Document));
+                return;
+            }
+            if (method == "GET" && path.Equals("/api-docs", StringComparison.OrdinalIgnoreCase))
+            {
+                const string html = """
+<!doctype html><html><head><title>SQL Cockpit Host API</title><link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css"></head><body><div id="swagger-ui"></div><script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script><script>SwaggerUIBundle({url:'/openapi.json',dom_id:'#swagger-ui'});</script></body></html>
+""";
+                var bytes = Encoding.UTF8.GetBytes(html);
+                context.Response.ContentType = "text/html; charset=utf-8";
+                context.Response.ContentLength64 = bytes.Length;
+                await context.Response.OutputStream.WriteAsync(bytes, cancellationToken);
+                context.Response.Close();
+                return;
+            }
+
             if (method == "GET" && path.Equals("/health", StringComparison.OrdinalIgnoreCase))
             {
                 await WriteJsonAsync(context.Response, 200, new
                 {
                     status = "ok",
                     service = "sql-cockpit-service-host",
+                    environmentId = _settings.EnvironmentId,
+                    channelName = _settings.ChannelName,
+                    serviceName = _settings.ServiceName,
+                    releaseVersion = _settings.ReleaseVersion,
+                    buildSha = _settings.BuildSha,
                     utcNow = DateTimeOffset.UtcNow
+                });
+                return;
+            }
+
+            if (method == "GET" && path.Equals("/api/runtime/environment", StringComparison.OrdinalIgnoreCase))
+            {
+                await WriteJsonAsync(context.Response, 200, _settings.ToEnvironmentSnapshot());
+                return;
+            }
+
+            if (method == "GET" && path.Equals("/api/runtime/doctor", StringComparison.OrdinalIgnoreCase))
+            {
+                await supervisor.RefreshSnapshotAsync(cancellationToken);
+                await WriteJsonAsync(context.Response, 200, new
+                {
+                    environment = _settings.ToEnvironmentSnapshot(),
+                    checks = _settings.BuildDoctorChecks(),
+                    runtime = supervisor.GetSnapshot()
                 });
                 return;
             }
@@ -427,6 +473,10 @@ internal sealed class ProcessSupervisor
 
         return new ServiceSnapshot(
             enabled: true,
+            environmentId: _settings.EnvironmentId,
+            channelName: _settings.ChannelName,
+            releaseVersion: _settings.ReleaseVersion,
+            buildSha: _settings.BuildSha,
             autoStart: _settings.AutoStart,
             autoRestart: _settings.AutoRestart,
             pollIntervalSeconds: _settings.HealthPollSeconds,
@@ -502,7 +552,7 @@ internal sealed class ProcessSupervisor
             state.Health.LastCheckedUtc = DateTimeOffset.UtcNow;
             state.OutputTail.Clear();
 
-            var logsDirectory = Path.Combine(_settings.ServiceRepoRoot, "Logs", "ServiceHost", componentId);
+            var logsDirectory = Path.Combine(_settings.LogsRoot, "ServiceHost", _settings.EnvironmentId, componentId);
             Directory.CreateDirectory(logsDirectory);
             var timestamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss");
             var logPath = Path.Combine(logsDirectory, $"{timestamp}.log");
@@ -526,6 +576,8 @@ internal sealed class ProcessSupervisor
             {
                 startInfo.ArgumentList.Add(ExpandValue(arg));
             }
+
+            _settings.ApplyChildEnvironment(startInfo);
 
             var process = new Process
             {
@@ -853,12 +905,18 @@ internal sealed class ComponentHealthState
 internal sealed class ServiceSettings
 {
     public string ServiceName { get; set; } = "SQLCockpitServiceHost";
+    public string EnvironmentId { get; set; } = "prod";
+    public string ChannelName { get; set; } = string.Empty;
+    public string ReleaseVersion { get; set; } = string.Empty;
+    public string BuildSha { get; set; } = string.Empty;
     public string SettingsPath { get; set; } = string.Empty;
     public string RepoRoot { get; set; } = string.Empty;
     public string DesktopRepoRoot { get; set; } = string.Empty;
     public string ApiRepoRoot { get; set; } = string.Empty;
     public string ServiceRepoRoot { get; set; } = string.Empty;
     public string ObjectSearchRepoRoot { get; set; } = string.Empty;
+    public string DataRoot { get; set; } = string.Empty;
+    public string LogsRoot { get; set; } = string.Empty;
     public string ListenPrefix { get; set; } = "http://127.0.0.1:8610/";
     public bool RequireLocalRequests { get; set; } = true;
     public string ApiKey { get; set; } = string.Empty;
@@ -871,6 +929,12 @@ internal sealed class ServiceSettings
 
     public void ResolveDefaults()
     {
+        EnvironmentId = NormalizeEnvironmentId(EnvironmentId);
+        if (string.IsNullOrWhiteSpace(ChannelName))
+        {
+            ChannelName = EnvironmentId;
+        }
+
         if (string.IsNullOrWhiteSpace(RepoRoot))
         {
             RepoRoot = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(SettingsPath) ?? AppContext.BaseDirectory, "..", "..", ".."));
@@ -891,6 +955,14 @@ internal sealed class ServiceSettings
         {
             ObjectSearchRepoRoot = Path.GetFullPath(Path.Combine(RepoRoot, "sql-cockpit-object-search"));
         }
+        if (string.IsNullOrWhiteSpace(DataRoot))
+        {
+            DataRoot = Path.GetFullPath(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "SqlCockpit", "Environments", EnvironmentId, "data"));
+        }
+        if (string.IsNullOrWhiteSpace(LogsRoot))
+        {
+            LogsRoot = Path.GetFullPath(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "SqlCockpit", "Environments", EnvironmentId, "Logs"));
+        }
 
         if (!ListenPrefix.EndsWith('/'))
         {
@@ -902,6 +974,75 @@ internal sealed class ServiceSettings
         {
             component.ResolveDefaults();
         }
+    }
+
+    public void ApplyChildEnvironment(ProcessStartInfo startInfo)
+    {
+        startInfo.Environment["SQL_COCKPIT_ENVIRONMENT_ID"] = EnvironmentId;
+        startInfo.Environment["SQL_COCKPIT_CHANNEL_NAME"] = ChannelName;
+        startInfo.Environment["SQL_COCKPIT_RELEASE_VERSION"] = ReleaseVersion;
+        startInfo.Environment["SQL_COCKPIT_BUILD_SHA"] = BuildSha;
+        startInfo.Environment["SQL_COCKPIT_SQLITE_STATE_ROOT"] = DataRoot;
+        // Do not let an inherited per-file override select another lane's auth store.
+        startInfo.Environment["SQL_COCKPIT_AUTH_STORE_PATH"] = Path.Combine(DataRoot, "sql-cockpit", "sql-cockpit-local.sqlite");
+    }
+
+    public EnvironmentSnapshot ToEnvironmentSnapshot()
+    {
+        return new EnvironmentSnapshot(
+            environmentId: EnvironmentId,
+            channelName: ChannelName,
+            serviceName: ServiceName,
+            serviceControlUrl: ListenPrefix,
+            settingsPath: SettingsPath,
+            repoRoot: RepoRoot,
+            apiRepoRoot: ApiRepoRoot,
+            serviceRepoRoot: ServiceRepoRoot,
+            objectSearchRepoRoot: ObjectSearchRepoRoot,
+            dataRoot: DataRoot,
+            logsRoot: LogsRoot,
+            releaseVersion: ReleaseVersion,
+            buildSha: BuildSha);
+    }
+
+    public IReadOnlyList<DoctorCheck> BuildDoctorChecks()
+    {
+        var checks = new List<DoctorCheck>
+        {
+            new("environment-id", string.IsNullOrWhiteSpace(EnvironmentId) ? "fail" : "pass", $"EnvironmentId is [{EnvironmentId}]."),
+            new("settings-path", string.IsNullOrWhiteSpace(SettingsPath) ? "fail" : "pass", string.IsNullOrWhiteSpace(SettingsPath) ? "SettingsPath is empty." : SettingsPath),
+            new("logs-root", string.IsNullOrWhiteSpace(LogsRoot) ? "fail" : "pass", string.IsNullOrWhiteSpace(LogsRoot) ? "LogsRoot is empty." : LogsRoot)
+        };
+
+        if (!string.Equals(EnvironmentId, "dev", StringComparison.OrdinalIgnoreCase))
+        {
+            var repoLooksLikeWorkspace = RepoRoot.Contains("Scripts", StringComparison.OrdinalIgnoreCase)
+                || RepoRoot.Contains(".worktrees", StringComparison.OrdinalIgnoreCase)
+                || Directory.Exists(Path.Combine(RepoRoot, ".git"));
+            checks.Add(new DoctorCheck(
+                "release-artifact-root",
+                repoLooksLikeWorkspace ? "warn" : "pass",
+                repoLooksLikeWorkspace
+                    ? "Test/prod should run from packaged release roots, not a developer workspace."
+                    : "RepoRoot does not look like a developer workspace."));
+        }
+
+        return checks;
+    }
+
+    private static string NormalizeEnvironmentId(string value)
+    {
+        var normalized = (value ?? string.Empty).Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            "development" => "dev",
+            "testing" => "test",
+            "beta" => "test",
+            "production" => "prod",
+            "dev" or "test" or "prod" => normalized,
+            "" => "prod",
+            _ => throw new InvalidOperationException("Unsupported environment identity; refusing to select a different lane.")
+        };
     }
 }
 
@@ -930,6 +1071,10 @@ internal sealed class ComponentSettings
 
 internal sealed record ServiceSnapshot(
     bool enabled,
+    string environmentId,
+    string channelName,
+    string releaseVersion,
+    string buildSha,
     bool autoStart,
     bool autoRestart,
     int pollIntervalSeconds,
@@ -939,6 +1084,26 @@ internal sealed record ServiceSnapshot(
     string serviceName,
     string serviceControlUrl,
     IReadOnlyList<ComponentSnapshot> components);
+
+internal sealed record EnvironmentSnapshot(
+    string environmentId,
+    string channelName,
+    string serviceName,
+    string serviceControlUrl,
+    string settingsPath,
+    string repoRoot,
+    string apiRepoRoot,
+    string serviceRepoRoot,
+    string objectSearchRepoRoot,
+    string dataRoot,
+    string logsRoot,
+    string releaseVersion,
+    string buildSha);
+
+internal sealed record DoctorCheck(
+    string id,
+    string status,
+    string message);
 
 internal sealed record ComponentSnapshot(
     string id,

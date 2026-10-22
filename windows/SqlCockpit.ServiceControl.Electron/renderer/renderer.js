@@ -5,6 +5,7 @@ const api = (typeof window !== "undefined" && window.serviceControl) ? window.se
 const state = {
     meta: null,
     snapshot: null,
+    environmentSnapshots: [],
     selectedComponentId: "",
     devNoticeShown: false,
     selectedComponent: null
@@ -20,6 +21,7 @@ const elements = {
     serviceName: document.getElementById("serviceName"),
     serviceStatus: document.getElementById("serviceStatus"),
     updateStatus: document.getElementById("updateStatus"),
+    environmentBody: document.getElementById("environmentBody"),
     componentBody: document.getElementById("componentBody"),
     componentDetail: document.getElementById("componentDetail"),
     statusBar: document.getElementById("statusBar"),
@@ -39,8 +41,19 @@ function renderEnvironmentStatus() {
     if (!elements.environmentStatus) {
         return;
     }
+    const environmentId = String(state.snapshot?.runtime?.environmentId || state.snapshot?.settings?.environmentId || state.meta?.environmentId || "").trim().toLowerCase();
+    const channelName = String(state.snapshot?.runtime?.channelName || state.snapshot?.settings?.channelName || state.meta?.channelName || "").trim();
+    const releaseVersion = String(state.snapshot?.runtime?.releaseVersion || state.snapshot?.settings?.releaseVersion || state.meta?.releaseVersion || "").trim();
+    const buildSha = String(state.snapshot?.runtime?.buildSha || state.snapshot?.settings?.buildSha || state.meta?.buildSha || "").trim();
     const runtimeProfile = String(state.snapshot?.settings?.runtimeProfile || "").trim().toLowerCase();
     const runtimeSuffix = runtimeProfile ? ` | Runtime: ${runtimeProfile}` : "";
+    const releaseSuffix = releaseVersion ? ` | ${releaseVersion}` : "";
+    const buildSuffix = buildSha ? ` | ${buildSha.slice(0, 12)}` : "";
+    if (environmentId) {
+        const label = channelName && channelName.toLowerCase() !== environmentId ? `${environmentId} / ${channelName}` : environmentId;
+        elements.environmentStatus.textContent = `Environment: ${label.toUpperCase()}${runtimeSuffix}${releaseSuffix}${buildSuffix}`;
+        return;
+    }
     if (state.meta?.isPackaged === false) {
         elements.environmentStatus.textContent = `Environment: Development Build${runtimeSuffix}`;
         return;
@@ -212,19 +225,13 @@ function renderMeta() {
     renderEnvironmentStatus();
 }
 
-function renderService(service) {
-    const statusMap = {
-        "1": "Stopped",
-        "2": "Start Pending",
-        "3": "Stop Pending",
-        "4": "Running",
-        "5": "Continue Pending",
-        "6": "Pause Pending",
-        "7": "Paused"
-    };
+function normalizeServiceStatus(status) {
+    const names = { 1: "Stopped", 2: "Start Pending", 3: "Stop Pending", 4: "Running", 5: "Continue Pending", 6: "Pause Pending", 7: "Paused" };
+    return names[String(status)] || String(status ?? "Unknown");
+}
 
-    const rawStatus = service?.Status ?? service?.status ?? "Unknown";
-    const normalized = statusMap[String(rawStatus)] || String(rawStatus);
+function renderService(service) {
+    const normalized = normalizeServiceStatus(service?.Status ?? service?.status);
     elements.serviceStatus.textContent = normalized;
     elements.serviceStatus.className = `pill ${serviceStatusClass(normalized)}`;
 
@@ -243,6 +250,87 @@ function renderService(service) {
     if (forceKillButton) {
         forceKillButton.disabled = !(isPending || (!isStopped && !isRunning));
     }
+}
+
+function escapeLaneText(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]));
+}
+
+function renderEnvironmentServices(environments = []) {
+    if (!elements.environmentBody) {
+        return;
+    }
+    elements.environmentBody.innerHTML = "";
+    if (!Array.isArray(environments) || !environments.length) {
+        const row = document.createElement("tr");
+        row.innerHTML = `<td colspan="9">No environment services available.</td>`;
+        elements.environmentBody.appendChild(row);
+        return;
+    }
+
+    environments.forEach((environment) => {
+        const components = Array.isArray(environment?.runtime?.components) && environment.runtime.components.length
+            ? environment.runtime.components
+            : [null];
+        const settings = environment?.settings || {};
+        const service = environment?.service || {};
+        const environmentId = String(environment?.environmentId || settings.environmentId || "").toLowerCase();
+        const label = String(environment?.label || environmentId || "Unknown");
+        const serviceStatus = normalizeServiceStatus(service?.Status ?? service?.status);
+        const installed = Boolean(settings.installed);
+        const runtimeError = environment?.diagnostics?.runtimeError || "";
+        const settingsError = environment?.diagnostics?.settingsError || "";
+
+        components.forEach((component, index) => {
+            const row = document.createElement("tr");
+            row.dataset.environmentId = environmentId;
+            if (component?.id) {
+                row.dataset.componentId = component.id;
+            }
+
+            const serviceActions = index === 0
+                ? `
+                  <button data-env-action="service-start" class="btn compact" ${installed ? "" : "disabled"}>${iconSvg("play")}<span>Start</span></button>
+                  <button data-env-action="service-stop" class="btn compact" ${installed ? "" : "disabled"}>${iconSvg("stop")}<span>Stop</span></button>
+                  <button data-env-action="components-start" class="btn compact" ${installed ? "" : "disabled"}>${iconSvg("play")}<span>Start All</span></button>
+                  <button data-env-action="components-restart" class="btn compact" ${installed ? "" : "disabled"}>${iconSvg("restart")}<span>Restart All</span></button>
+                  <button data-env-action="components-stop" class="btn compact" ${installed ? "" : "disabled"}>${iconSvg("stop")}<span>Stop All</span></button>
+                `
+                : "";
+            const componentActions = component?.id
+                ? `
+                  <button data-env-action="component-start" class="btn compact">${iconSvg("play")}<span>Start</span></button>
+                  <button data-env-action="component-restart" class="btn compact">${iconSvg("restart")}<span>Restart</span></button>
+                  <button data-env-action="component-stop" class="btn compact">${iconSvg("stop")}<span>Stop</span></button>
+                `
+                : "";
+            const actions = `${serviceActions}${componentActions}`.trim();
+            const componentStatus = component ? formatStatus(component) : (settingsError || runtimeError || "No components");
+
+            row.innerHTML = `
+                <td><strong>${escapeLaneText(label)}</strong><br><span class="muted">${escapeLaneText(environmentId || "-")}</span></td>
+                <td>${escapeLaneText(settings.serviceName || service.Name || "-")}</td>
+                <td class="${serviceStatusClass(serviceStatus)}">${escapeLaneText(serviceStatus)}</td>
+                <td>${escapeLaneText(settings.controlApiBaseUrl || "-")}</td>
+                <td>${escapeLaneText(component?.displayName || component?.id || "-")}</td>
+                <td class="${serviceStatusClass(component ? formatStatus(component) : "")}">${escapeLaneText(componentStatus)}</td>
+                <td class="${healthClass(component?.health?.status)}">${escapeLaneText(component?.health?.status || "-")}</td>
+                <td>${escapeLaneText(component ? extractPorts(component) : "-")}</td>
+                <td>${actions || "-"}</td>
+            `;
+
+            row.addEventListener("click", (event) => {
+                const actionButton = event.target?.closest?.("button[data-env-action]");
+                if (!actionButton) {
+                    return;
+                }
+                runEnvironmentAction(environmentId, component?.id || "", actionButton.dataset.envAction, actionButton);
+                event.stopPropagation();
+            });
+
+            elements.environmentBody.appendChild(row);
+        });
+    });
 }
 
 function renderComponents(runtime, diagnostics = {}) {
@@ -411,6 +499,16 @@ async function refreshAll() {
     }
 
     try {
+        const environmentSnapshot = await requireApi().getEnvironmentStatus();
+        state.environmentSnapshots = Array.isArray(environmentSnapshot?.environments) ? environmentSnapshot.environments : [];
+        renderEnvironmentServices(state.environmentSnapshots);
+    } catch (error) {
+        renderEnvironmentServices([]);
+        setStatus(`Environment refresh failed: ${error.message}`);
+        showToast(`Environment refresh failed: ${error.message}`, "error");
+    }
+
+    try {
         const snapshot = await requireApi().getStatus();
         state.snapshot = snapshot;
         if (state.meta && !state.meta.repoRoot && snapshot?.settings?.repoRoot) {
@@ -529,6 +627,38 @@ async function runComponentAction(componentId, action, button) {
     });
 }
 
+async function runEnvironmentAction(environmentId, componentId, action, button) {
+    return withActionLock(`environment:${environmentId}:${componentId}:${action}`, button, async () => {
+        try {
+            if (action === "service-start") {
+                await requireApi().environmentServiceAction(environmentId, "start");
+            } else if (action === "service-stop") {
+                await requireApi().environmentServiceAction(environmentId, "stop");
+            } else if (action === "components-start") {
+                await requireApi().environmentComponentsAction(environmentId, "start");
+            } else if (action === "components-restart") {
+                await requireApi().environmentComponentsAction(environmentId, "restart");
+            } else if (action === "components-stop") {
+                await requireApi().environmentComponentsAction(environmentId, "stop");
+            } else if (action === "component-start") {
+                await requireApi().environmentComponentAction(environmentId, componentId, "start");
+            } else if (action === "component-restart") {
+                await requireApi().environmentComponentAction(environmentId, componentId, "restart");
+            } else if (action === "component-stop") {
+                await requireApi().environmentComponentAction(environmentId, componentId, "stop");
+            } else {
+                throw new Error(`Unsupported environment action: ${action}`);
+            }
+            await refreshAll();
+            setStatus(`${action} succeeded for ${environmentId}.`);
+            showToast(`${action} succeeded for ${environmentId}.`, "success");
+        } catch (error) {
+            setStatus(`${action} failed for ${environmentId}: ${error.message}`);
+            showToast(`${action} failed for ${environmentId}: ${error.message}`, "error");
+        }
+    });
+}
+
 async function launchDesktopUiWithPreflight() {
     const result = await requireApi().launchDesktopUserSession();
     const pidText = result?.pid ? ` (PID ${result.pid})` : "";
@@ -550,11 +680,12 @@ function wireButtons() {
     if (elements.openServiceLogsButton) {
         elements.openServiceLogsButton.addEventListener("click", async () => {
             const repoRoot = state.meta?.repoRoot || state.snapshot?.settings?.repoRoot;
-            if (!repoRoot) {
-                showToast("No repo root found in settings.", "warning");
+            const logsRoot = state.meta?.logsRoot || state.snapshot?.settings?.logsRoot;
+            const path = logsRoot || (repoRoot ? `${repoRoot}\\Logs\\ServiceHost` : "");
+            if (!path) {
+                showToast("No logs root found in settings.", "warning");
                 return;
             }
-            const path = `${repoRoot}\\Logs\\ServiceHost`;
             try {
                 await requireApi().openPath(path);
                 showToast("Opened service logs folder.", "success");
@@ -645,6 +776,7 @@ function wireButtons() {
     }
 
     bindButton("refreshButton", (button) => withActionLock("refresh", button, refreshAll));
+    bindButton("refreshEnvironmentsButton", (button) => withActionLock("refresh-environments", button, refreshAll));
     bindButton("startServiceButton", (button) => runServiceAction("start", button));
     bindButton("stopServiceButton", (button) => runServiceAction("stop", button));
     bindButton("forceKillServiceButton", (button) => withActionLock("forceKill", button, async () => {
