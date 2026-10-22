@@ -284,3 +284,7 @@ This project is licensed under the **Apache License 2.0** - see [LICENSE](LICENS
 [⭐ Star this repo](https://github.com/sql-cockpit/sql-cockpit-servicemanager) | [🐛 Report an issue](https://github.com/sql-cockpit/sql-cockpit-servicemanager/issues) | [📖 View main project](https://github.com/sql-cockpit/sql-cockpit)
 
 </div>
+
+## Runtime lane review
+
+See [Windows Host lane configuration](docs/runtime-lane-review.md) for settings, local diagnostic API, migration precautions and verification without packaging.

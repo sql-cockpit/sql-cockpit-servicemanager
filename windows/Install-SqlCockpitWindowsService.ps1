@@ -118,7 +118,7 @@ function Set-ServiceSettingsLane {
 
     $settings = Get-Content -LiteralPath $SettingsPath -Raw | ConvertFrom-Json
     $settingsDirectory = Split-Path -Path $SettingsPath -Parent
-    $programDataRoot = Join-Path -Path $env:ProgramData -ChildPath "SqlCockpit\$EnvironmentId"
+    $programDataRoot = Join-Path -Path $env:ProgramData -ChildPath "SqlCockpit\Environments\$EnvironmentId"
     $objectSearchSettingsPath = Join-Path -Path $settingsDirectory -ChildPath "sql-object-search.$EnvironmentId.settings.json"
     $settings.environmentId = $EnvironmentId
     $settings.channelName = $EnvironmentId
@@ -248,6 +248,7 @@ if (-not [string]::IsNullOrWhiteSpace($EnvironmentId)) {
         $SettingsProfile = $laneDefaults.SettingsProfile
     }
 }
+if ($laneDefaults) { $laneDefaults.ServiceName = $ServiceName }
 $publishLeaf = if ($laneDefaults) { "$RuntimeIdentifier-$EnvironmentId" } else { $RuntimeIdentifier }
 $publishPath = Join-Path -Path $serviceRoot -ChildPath ("publish\" + $publishLeaf)
 $publishedExePath = Join-Path -Path $publishPath -ChildPath "SqlCockpit.ServiceHost.Windows.exe"
@@ -267,7 +268,7 @@ if (-not (Test-Path -LiteralPath $templateSettingsPath -PathType Leaf)) {
 
 if ([string]::IsNullOrWhiteSpace($SettingsPath)) {
     $settingsDirectory = if ($laneDefaults) {
-        Join-Path -Path $env:ProgramData -ChildPath "SqlCockpit\$EnvironmentId"
+        Join-Path -Path $env:ProgramData -ChildPath "SqlCockpit\Environments\$EnvironmentId"
     } else {
         Join-Path -Path $env:ProgramData -ChildPath "SqlCockpit"
     }
@@ -278,7 +279,14 @@ if ([string]::IsNullOrWhiteSpace($SettingsPath)) {
     $SettingsPath = Join-Path -Path $settingsDirectory -ChildPath "sql-cockpit-service.settings.json"
 }
 
- $serviceExists = $false
+if ($laneDefaults -and (Test-Path -LiteralPath $SettingsPath -PathType Leaf)) {
+    $existingSettings = Get-Content -LiteralPath $SettingsPath -Raw | ConvertFrom-Json
+    if ($existingSettings.environmentId -ne $EnvironmentId -or $existingSettings.serviceName -ne $ServiceName) {
+        throw "Existing settings do not match the requested environment/service. Reconcile a backed-up settings copy before installing; no service was stopped."
+    }
+}
+
+$serviceExists = $false
 try {
     $existingService = Get-Service -Name $ServiceName -ErrorAction Stop
     $serviceExists = $null -ne $existingService

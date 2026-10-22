@@ -16,19 +16,19 @@ const LANE_DEFAULTS = {
         label: "Development",
         serviceName: "SQLCockpitServiceHost.Dev",
         controlApiBaseUrl: "http://127.0.0.1:8610",
-        settingsPath: path.join(process.env.ProgramData || "C:\\ProgramData", "SqlCockpit", "dev", "sql-cockpit-service.settings.json")
+        settingsPath: path.join(process.env.ProgramData || "C:\\ProgramData", "SqlCockpit", "Environments", "dev", "sql-cockpit-service.settings.json")
     },
     test: {
         label: "Test",
         serviceName: "SQLCockpitServiceHost.Test",
         controlApiBaseUrl: "http://127.0.0.1:8620",
-        settingsPath: path.join(process.env.ProgramData || "C:\\ProgramData", "SqlCockpit", "test", "sql-cockpit-service.settings.json")
+        settingsPath: path.join(process.env.ProgramData || "C:\\ProgramData", "SqlCockpit", "Environments", "test", "sql-cockpit-service.settings.json")
     },
     prod: {
         label: "Production",
         serviceName: "SQLCockpitServiceHost.Prod",
         controlApiBaseUrl: "http://127.0.0.1:8630",
-        settingsPath: path.join(process.env.ProgramData || "C:\\ProgramData", "SqlCockpit", "prod", "sql-cockpit-service.settings.json"),
+        settingsPath: path.join(process.env.ProgramData || "C:\\ProgramData", "SqlCockpit", "Environments", "prod", "sql-cockpit-service.settings.json"),
         legacySettingsPath: path.join(process.env.ProgramData || "C:\\ProgramData", "SqlCockpit", "sql-cockpit-service.settings.json")
     }
 };
@@ -106,17 +106,13 @@ function execFileAsync(filePath, args, options = {}) {
 }
 
 function resolveSettingsPath(explicitPath = "") {
-    if (explicitPath && fs.existsSync(explicitPath)) {
-        return path.resolve(explicitPath);
-    }
-    if (settingsPathFromCli && fs.existsSync(settingsPathFromCli)) {
-        return path.resolve(settingsPathFromCli);
-    }
-    if (["dev", "test", "prod"].includes(environmentIdFromCli)) {
-        const lanePath = path.join(process.env.ProgramData || "C:\\ProgramData", "SqlCockpit", environmentIdFromCli, "sql-cockpit-service.settings.json");
-        if (fs.existsSync(lanePath)) {
-            return path.resolve(lanePath);
-        }
+    // A requested lane/path must never fall back to another environment.
+    if (explicitPath) return path.resolve(explicitPath);
+    if (settingsPathFromCli) return path.resolve(settingsPathFromCli);
+    if (environmentIdFromCli) {
+        const lane = normalizeEnvironmentId(environmentIdFromCli);
+        if (!lane) throw new Error(`Unsupported environment: ${environmentIdFromCli}`);
+        return path.resolve(LANE_DEFAULTS[lane].settingsPath);
     }
     return path.resolve(DEFAULT_SETTINGS_PATH);
 }
@@ -218,8 +214,12 @@ function getLaneSettings(environmentId) {
             : "";
 
     if (settingsPath) {
+        const loaded = readServiceSettings(settingsPath);
+        if (normalizeEnvironmentId(loaded.environmentId) !== normalized) {
+            throw new Error(`Settings identity does not match requested environment ${normalized}.`);
+        }
         return {
-            ...readServiceSettings(settingsPath),
+            ...loaded,
             environmentId: normalized,
             laneLabel: defaults.label,
             installed: true
@@ -236,7 +236,7 @@ function getLaneSettings(environmentId) {
         controlApiBaseUrl: defaults.controlApiBaseUrl,
         repoRoot: "",
         dataRoot: "",
-        logsRoot: path.join(process.env.ProgramData || "C:\\ProgramData", "SqlCockpit", normalized, "Logs"),
+        logsRoot: path.join(process.env.ProgramData || "C:\\ProgramData", "SqlCockpit", "Environments", normalized, "Logs"),
         releaseVersion: "",
         buildSha: "",
         installed: false
@@ -344,6 +344,11 @@ function ensureWebApiSettingsContract(explicitPath = "") {
     const raw = readJsonFile(settingsPath);
     if (!raw || !Array.isArray(raw.components)) {
         return { changed: false, reason: "components-not-found" };
+    }
+
+    if (normalizeEnvironmentId(raw.environmentId)) {
+        // Explicit lane settings own their ports, enabled components and runtime profile.
+        return { changed: false, reason: "lane-settings-authoritative" };
     }
 
     const component = raw.components.find((item) => String(item?.id || "").toLowerCase() === WEB_API_COMPONENT_ID);
@@ -653,11 +658,11 @@ async function ensureManagedApiStartedFromControlApp() {
     }
 
     if (!webApi.running) {
-        sendToRenderer("updates:status", { level: "info", message: "Starting managed web-api on port 8000..." });
+        sendToRenderer("updates:status", { level: "info", message: "Starting selected environment web-api..." });
         await requestControlApi(settings, `/api/runtime/components/${encodeURIComponent(WEB_API_COMPONENT_ID)}/start`, "POST");
     }
 
-    sendToRenderer("updates:status", { level: "success", message: "Managed web-api is online at http://127.0.0.1:8000/." });
+    sendToRenderer("updates:status", { level: "success", message: "Selected environment web-api is running." });
 }
 
 async function requestControlApi(settings, endpoint, method = "GET") {
@@ -1266,7 +1271,7 @@ app.whenReady().then(() => {
         if (reconciliation.changed) {
             sendToRenderer("updates:status", {
                 level: "info",
-                message: `Updated service settings to enforce web-api on ${WEB_API_LISTEN_PREFIX}`
+                message: "Updated legacy web-api settings"
             });
         }
     } catch (error) {

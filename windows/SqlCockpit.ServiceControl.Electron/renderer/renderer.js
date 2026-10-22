@@ -225,19 +225,13 @@ function renderMeta() {
     renderEnvironmentStatus();
 }
 
-function renderService(service) {
-    const statusMap = {
-        "1": "Stopped",
-        "2": "Start Pending",
-        "3": "Stop Pending",
-        "4": "Running",
-        "5": "Continue Pending",
-        "6": "Pause Pending",
-        "7": "Paused"
-    };
+function normalizeServiceStatus(status) {
+    const names = { 1: "Stopped", 2: "Start Pending", 3: "Stop Pending", 4: "Running", 5: "Continue Pending", 6: "Pause Pending", 7: "Paused" };
+    return names[String(status)] || String(status ?? "Unknown");
+}
 
-    const rawStatus = service?.Status ?? service?.status ?? "Unknown";
-    const normalized = statusMap[String(rawStatus)] || String(rawStatus);
+function renderService(service) {
+    const normalized = normalizeServiceStatus(service?.Status ?? service?.status);
     elements.serviceStatus.textContent = normalized;
     elements.serviceStatus.className = `pill ${serviceStatusClass(normalized)}`;
 
@@ -256,6 +250,10 @@ function renderService(service) {
     if (forceKillButton) {
         forceKillButton.disabled = !(isPending || (!isStopped && !isRunning));
     }
+}
+
+function escapeLaneText(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]));
 }
 
 function renderEnvironmentServices(environments = []) {
@@ -278,7 +276,7 @@ function renderEnvironmentServices(environments = []) {
         const service = environment?.service || {};
         const environmentId = String(environment?.environmentId || settings.environmentId || "").toLowerCase();
         const label = String(environment?.label || environmentId || "Unknown");
-        const serviceStatus = String(service?.Status ?? service?.status ?? "Unknown");
+        const serviceStatus = normalizeServiceStatus(service?.Status ?? service?.status);
         const installed = Boolean(settings.installed);
         const runtimeError = environment?.diagnostics?.runtimeError || "";
         const settingsError = environment?.diagnostics?.settingsError || "";
@@ -310,14 +308,14 @@ function renderEnvironmentServices(environments = []) {
             const componentStatus = component ? formatStatus(component) : (settingsError || runtimeError || "No components");
 
             row.innerHTML = `
-                <td><strong>${label}</strong><br><span class="muted">${environmentId || "-"}</span></td>
-                <td>${settings.serviceName || service.Name || "-"}</td>
-                <td class="${serviceStatusClass(serviceStatus)}">${serviceStatus}</td>
-                <td>${settings.controlApiBaseUrl || "-"}</td>
-                <td>${component?.displayName || component?.id || "-"}</td>
-                <td class="${serviceStatusClass(component ? formatStatus(component) : "")}">${componentStatus}</td>
-                <td class="${healthClass(component?.health?.status)}">${component?.health?.status || "-"}</td>
-                <td>${component ? extractPorts(component) : "-"}</td>
+                <td><strong>${escapeLaneText(label)}</strong><br><span class="muted">${escapeLaneText(environmentId || "-")}</span></td>
+                <td>${escapeLaneText(settings.serviceName || service.Name || "-")}</td>
+                <td class="${serviceStatusClass(serviceStatus)}">${escapeLaneText(serviceStatus)}</td>
+                <td>${escapeLaneText(settings.controlApiBaseUrl || "-")}</td>
+                <td>${escapeLaneText(component?.displayName || component?.id || "-")}</td>
+                <td class="${serviceStatusClass(component ? formatStatus(component) : "")}">${escapeLaneText(componentStatus)}</td>
+                <td class="${healthClass(component?.health?.status)}">${escapeLaneText(component?.health?.status || "-")}</td>
+                <td>${escapeLaneText(component ? extractPorts(component) : "-")}</td>
                 <td>${actions || "-"}</td>
             `;
 

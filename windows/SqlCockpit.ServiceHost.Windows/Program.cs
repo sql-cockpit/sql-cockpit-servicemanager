@@ -49,7 +49,7 @@ public static class Program
             return;
         }
 
-        ServiceBase.Run(new WindowsServiceBridge(host));
+        ServiceBase.Run(new WindowsServiceBridge(host, settings.ServiceName));
     }
 
     private static Dictionary<string, string> ParseArgs(string[] args)
@@ -106,9 +106,14 @@ public static class Program
         return parsed;
     }
 
-    private sealed class WindowsServiceBridge(ServiceHost host) : ServiceBase
+    private sealed class WindowsServiceBridge : ServiceBase
     {
-        private readonly ServiceHost _host = host;
+        private readonly ServiceHost _host;
+        public WindowsServiceBridge(ServiceHost host, string serviceName)
+        {
+            _host = host;
+            ServiceName = serviceName;
+        }
 
         protected override void OnStart(string[] args)
         {
@@ -259,6 +264,24 @@ internal sealed class ControlApiServer(ServiceSettings settings)
             var path = context.Request.Url?.AbsolutePath ?? "/";
             var method = context.Request.HttpMethod.ToUpperInvariant();
             var supervisor = _supervisor ?? throw new InvalidOperationException("Supervisor is unavailable.");
+
+            if (method == "GET" && path.Equals("/openapi.json", StringComparison.OrdinalIgnoreCase))
+            {
+                await WriteJsonAsync(context.Response, 200, JsonSerializer.Deserialize<JsonElement>(ServiceHostOpenApi.Document));
+                return;
+            }
+            if (method == "GET" && path.Equals("/api-docs", StringComparison.OrdinalIgnoreCase))
+            {
+                const string html = """
+<!doctype html><html><head><title>SQL Cockpit Host API</title><link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css"></head><body><div id="swagger-ui"></div><script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script><script>SwaggerUIBundle({url:'/openapi.json',dom_id:'#swagger-ui'});</script></body></html>
+""";
+                var bytes = Encoding.UTF8.GetBytes(html);
+                context.Response.ContentType = "text/html; charset=utf-8";
+                context.Response.ContentLength64 = bytes.Length;
+                await context.Response.OutputStream.WriteAsync(bytes, cancellationToken);
+                context.Response.Close();
+                return;
+            }
 
             if (method == "GET" && path.Equals("/health", StringComparison.OrdinalIgnoreCase))
             {
@@ -553,6 +576,8 @@ internal sealed class ProcessSupervisor
             {
                 startInfo.ArgumentList.Add(ExpandValue(arg));
             }
+
+            _settings.ApplyChildEnvironment(startInfo);
 
             var process = new Process
             {
@@ -881,7 +906,7 @@ internal sealed class ServiceSettings
 {
     public string ServiceName { get; set; } = "SQLCockpitServiceHost";
     public string EnvironmentId { get; set; } = "prod";
-    public string ChannelName { get; set; } = "prod";
+    public string ChannelName { get; set; } = string.Empty;
     public string ReleaseVersion { get; set; } = string.Empty;
     public string BuildSha { get; set; } = string.Empty;
     public string SettingsPath { get; set; } = string.Empty;
@@ -932,11 +957,11 @@ internal sealed class ServiceSettings
         }
         if (string.IsNullOrWhiteSpace(DataRoot))
         {
-            DataRoot = Path.GetFullPath(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "SqlCockpit", EnvironmentId, "data"));
+            DataRoot = Path.GetFullPath(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "SqlCockpit", "Environments", EnvironmentId, "data"));
         }
         if (string.IsNullOrWhiteSpace(LogsRoot))
         {
-            LogsRoot = Path.GetFullPath(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "SqlCockpit", EnvironmentId, "Logs"));
+            LogsRoot = Path.GetFullPath(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "SqlCockpit", "Environments", EnvironmentId, "Logs"));
         }
 
         if (!ListenPrefix.EndsWith('/'))
@@ -949,6 +974,17 @@ internal sealed class ServiceSettings
         {
             component.ResolveDefaults();
         }
+    }
+
+    public void ApplyChildEnvironment(ProcessStartInfo startInfo)
+    {
+        startInfo.Environment["SQL_COCKPIT_ENVIRONMENT_ID"] = EnvironmentId;
+        startInfo.Environment["SQL_COCKPIT_CHANNEL_NAME"] = ChannelName;
+        startInfo.Environment["SQL_COCKPIT_RELEASE_VERSION"] = ReleaseVersion;
+        startInfo.Environment["SQL_COCKPIT_BUILD_SHA"] = BuildSha;
+        startInfo.Environment["SQL_COCKPIT_SQLITE_STATE_ROOT"] = DataRoot;
+        // Do not let an inherited per-file override select another lane's auth store.
+        startInfo.Environment["SQL_COCKPIT_AUTH_STORE_PATH"] = Path.Combine(DataRoot, "sql-cockpit", "sql-cockpit-local.sqlite");
     }
 
     public EnvironmentSnapshot ToEnvironmentSnapshot()
@@ -1004,7 +1040,8 @@ internal sealed class ServiceSettings
             "beta" => "test",
             "production" => "prod",
             "dev" or "test" or "prod" => normalized,
-            _ => "prod"
+            "" => "prod",
+            _ => throw new InvalidOperationException("Unsupported environment identity; refusing to select a different lane.")
         };
     }
 }
